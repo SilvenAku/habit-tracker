@@ -662,6 +662,24 @@ const HABITS = [];
 
 function isLogged(habit, d) { return habit.logs.has(dateKey(d)); }
 
+// Calories: Health categories add to net intake (positive), Fitness subtracts (negative).
+// User always types positive numbers; sign is implied by category.
+function isCalorieHabit(h) { return h.category === 'Health' || h.category === 'Fitness'; }
+function caloriesForDate(habit, d) {
+  if (!isCalorieHabit(habit)) return 0;
+  const v = habit.calories?.[dateKey(d)];
+  if (typeof v !== 'number') return 0;
+  return habit.category === 'Health' ? v : -v;
+}
+function netCaloriesForDates(habits, dates) {
+  let net = 0;
+  for (const h of habits) {
+    if (!isCalorieHabit(h)) continue;
+    for (const d of dates) net += caloriesForDate(h, d);
+  }
+  return net;
+}
+
 const STORAGE_KEY = 'habit-tracker-v1';
 function loadPersisted() {
   try {
@@ -669,7 +687,11 @@ function loadPersisted() {
     if (!raw) return null;
     const p = JSON.parse(raw);
     return {
-      habits: (p.habits || []).map(h => ({ ...h, logs: new Set(h.logs || []) })),
+      habits: (p.habits || []).map(h => ({
+        ...h,
+        logs: new Set(h.logs || []),
+        calories: h.calories || {},
+      })),
       categories: p.categories || null,
     };
   } catch { return null; }
@@ -677,13 +699,17 @@ function loadPersisted() {
 function savePersisted(habits, categories) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      habits: habits.map(h => ({ ...h, logs: Array.from(h.logs || []) })),
+      habits: habits.map(h => ({ ...h, logs: Array.from(h.logs || []), calories: h.calories || {} })),
       categories,
     }));
   } catch {}
 }
 
-Object.assign(window, { TODAY, HABITS, dateKey, addDays, startOfWeek, isLogged, loadPersisted, savePersisted });
+Object.assign(window, {
+  TODAY, HABITS, dateKey, addDays, startOfWeek, isLogged,
+  isCalorieHabit, caloriesForDate, netCaloriesForDates,
+  loadPersisted, savePersisted,
+});
 </script>
 
 <!-- ============================================================ -->
@@ -691,6 +717,64 @@ Object.assign(window, { TODAY, HABITS, dateKey, addDays, startOfWeek, isLogged, 
 <!-- ============================================================ -->
 <script type="text/babel">
 const { useState, useMemo, useEffect } = React;
+
+// Calorie indicator card — reused on Day / Week / Month
+function CalorieIndicator({ palette, label, net, goal, days = 1 }) {
+  const p = palette;
+  const totalGoal = goal * days;
+  const remaining = totalGoal - net;
+  const isOver = remaining < 0;
+  const fill = totalGoal > 0 ? Math.min(1, Math.max(0, net / totalGoal)) : 0;
+  const fmt = (n) => Math.round(n).toLocaleString();
+  return (
+    <div style={{
+      margin: '0 24px 16px', padding: '12px 14px',
+      background: p.bgRaised, position: 'relative',
+    }}>
+      {[{top:-3,left:-3},{top:-3,right:-3},{bottom:-3,left:-3},{bottom:-3,right:-3}].map((pos,i) => (
+        <div key={i} style={{ position:'absolute', width:6, height:6, background: isOver ? p.flame : p.gold, ...pos }}/>
+      ))}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8 }}>
+        <div>
+          <div style={{
+            fontFamily: 'Inter', fontSize: 9, letterSpacing: 2, color: p.goldDim,
+            textTransform: 'uppercase', fontWeight: 600,
+          }}>{label}</div>
+          <div style={{
+            fontFamily: 'JetBrains Mono', fontSize: 12, color: p.pearlDim,
+            marginTop: 4, letterSpacing: 0.5,
+          }}>{fmt(net)} / {fmt(totalGoal)} kcal</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{
+            fontFamily: '"Cormorant Garamond", serif', fontSize: 26,
+            color: isOver ? p.flame : p.gold, fontWeight: 500, lineHeight: 1,
+          }}>
+            {isOver ? '+' : ''}{fmt(Math.abs(remaining))}
+          </div>
+          <div style={{
+            fontFamily: 'Inter', fontSize: 9, color: isOver ? p.flame : p.pearlDim,
+            letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 3, fontWeight: 600,
+          }}>{isOver ? 'over' : 'left'}</div>
+        </div>
+      </div>
+      <div style={{ height: 2, background: `${p.gold}22`, position: 'relative', overflow: 'hidden' }}>
+        <div style={{
+          position: 'absolute', left: 0, top: 0, height: '100%',
+          width: `${Math.min(100, fill * 100)}%`,
+          background: isOver
+            ? `linear-gradient(to right, ${p.gold}, ${p.flame})`
+            : `linear-gradient(to right, ${p.goldDim}, ${p.gold})`,
+        }}/>
+        {isOver && (
+          <div style={{
+            position: 'absolute', right: 0, top: -1, width: 2, height: 4, background: p.flame,
+          }}/>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function ViewHeader({ palette, eyebrow, title, subtitle, onBack, right }) {
   const p = palette;
@@ -727,7 +811,7 @@ function ViewHeader({ palette, eyebrow, title, subtitle, onBack, right }) {
   );
 }
 
-function DayView({ palette, checkboxStyle, habits, toggleLog, categories = [], currentDate, setCurrentDate, onOpenHabit, onOpenDate }) {
+function DayView({ palette, checkboxStyle, habits, toggleLog, setCalorie, caloriesGoal = 0, categories = [], currentDate, setCurrentDate, onOpenHabit, onOpenDate }) {
   const p = palette;
   const isToday = dateKey(currentDate) === dateKey(TODAY);
   const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -778,6 +862,12 @@ function DayView({ palette, checkboxStyle, habits, toggleLog, categories = [], c
           <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: p.goldDim, letterSpacing: 1 }}>{visibleHabits.length.toString().padStart(2,'0')}</div>
         </div>
       </div>
+
+      {caloriesGoal > 0 && habits.some(isCalorieHabit) && (
+        <CalorieIndicator palette={p} label="Today's calories"
+          net={netCaloriesForDates(habits, [currentDate])}
+          goal={caloriesGoal} days={1}/>
+      )}
 
       <OrnateDivider color={p.gold} style={{ padding: '0 24px', marginBottom: 16 }}/>
 
@@ -836,6 +926,36 @@ function DayView({ palette, checkboxStyle, habits, toggleLog, categories = [], c
                   }}>
                     {h.category} · {h.frequency}
                   </div>
+                  {isCalorieHabit(h) && (
+                    <div onClick={(e) => e.stopPropagation()} style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      marginTop: 8, marginLeft: 22,
+                    }}>
+                      <span style={{
+                        fontFamily: 'JetBrains Mono', fontSize: 14,
+                        color: h.category === 'Health' ? p.gold : p.flame,
+                        fontWeight: 600, width: 12,
+                      }}>{h.category === 'Health' ? '+' : '−'}</span>
+                      <input
+                        type="number" inputMode="numeric" min="0" step="1"
+                        placeholder="0"
+                        value={h.calories?.[dateKey(currentDate)] ?? ''}
+                        onChange={(e) => setCalorie(h.id, currentDate, e.target.value)}
+                        onFocus={(e) => e.stopPropagation()}
+                        style={{
+                          width: 70, padding: '4px 6px', boxSizing: 'border-box',
+                          background: 'transparent',
+                          border: `1px solid ${p.gold}44`,
+                          color: p.pearl, fontFamily: 'JetBrains Mono, monospace',
+                          fontSize: 13, outline: 'none', textAlign: 'right',
+                        }}
+                      />
+                      <span style={{
+                        fontFamily: 'Inter', fontSize: 10, letterSpacing: 1.5,
+                        color: p.pearlDim, textTransform: 'uppercase', fontWeight: 500,
+                      }}>kcal {h.category === 'Health' ? 'eaten' : 'burned'}</span>
+                    </div>
+                  )}
                 </div>
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 5,
@@ -874,7 +994,7 @@ function navBtn(p) {
   };
 }
 
-function WeekView({ palette, checkboxStyle, habits, toggleLog, currentDate, setCurrentDate, onOpenHabit }) {
+function WeekView({ palette, checkboxStyle, habits, toggleLog, caloriesGoal = 0, currentDate, setCurrentDate, onOpenHabit }) {
   const p = palette;
   const weekStart = startOfWeek(currentDate);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -909,6 +1029,12 @@ function WeekView({ palette, checkboxStyle, habits, toggleLog, currentDate, setC
           </div>
         }
       />
+
+      {caloriesGoal > 0 && habits.some(isCalorieHabit) && (
+        <CalorieIndicator palette={p} label={`Week ${weekNum} calories`}
+          net={netCaloriesForDates(habits, days)}
+          goal={caloriesGoal} days={7}/>
+      )}
 
       <OrnateDivider color={p.gold} style={{ padding: '0 24px', margin: '12px 0 16px' }}/>
 
@@ -993,7 +1119,7 @@ function WeekView({ palette, checkboxStyle, habits, toggleLog, currentDate, setC
   );
 }
 
-function MonthView({ palette, checkboxStyle, habits, toggleLog, categories = [], currentDate, setCurrentDate, onOpenHabit }) {
+function MonthView({ palette, checkboxStyle, habits, toggleLog, caloriesGoal = 0, categories = [], currentDate, setCurrentDate, onOpenHabit }) {
   const p = palette;
   const [filterCategory, setFilterCategory] = useState("__all");
   useEffect(() => {
@@ -1156,6 +1282,14 @@ function MonthView({ palette, checkboxStyle, habits, toggleLog, categories = [],
           <Stat palette={p} label="Longest" value={longestStreak.toString()}/>
         </div>
       </div>
+
+      {caloriesGoal > 0 && habits.some(isCalorieHabit) && (
+        <div style={{ marginTop: 16 }}>
+          <CalorieIndicator palette={p} label={`${monthNames[month]} calories`}
+            net={netCaloriesForDates(habits, cells.filter(d => d && d <= TODAY))}
+            goal={caloriesGoal} days={cells.filter(d => d && d <= TODAY && d.getMonth() === month).length}/>
+        </div>
+      )}
     </div>
   );
 }
@@ -1937,7 +2071,8 @@ const { useState: useStateA, useEffect: useEffectA } = React;
 const TWEAK_DEFAULTS = {
   "palette": "midnight",
   "checkboxStyle": "rosette",
-  "soundsEnabled": true
+  "soundsEnabled": true,
+  "caloriesGoal": 2000
 };
 
 // ── Audio (synthesized; no files) ───────────────────────────────────────────
@@ -2069,6 +2204,22 @@ function HabitApp({ tweaks, setTweak }) {
     }));
   }
 
+  function setCalorie(habitId, date, raw) {
+    setHabits(prev => prev.map(h => {
+      if (h.id !== habitId) return h;
+      const k = dateKey(date);
+      const calories = { ...(h.calories || {}) };
+      const trimmed = String(raw ?? '').trim();
+      const n = trimmed === '' ? NaN : Number(trimmed);
+      if (!Number.isFinite(n) || n <= 0) {
+        delete calories[k];
+      } else {
+        calories[k] = Math.round(n);
+      }
+      return { ...h, calories };
+    }));
+  }
+
   const allKeptToday = habits.length > 0 && habits.every(h => h.logs.has(dateKey(TODAY)));
   const prevAllKeptRef = React.useRef(allKeptToday);
   const [showCelebration, setShowCelebration] = useStateA(false);
@@ -2131,6 +2282,8 @@ function HabitApp({ tweaks, setTweak }) {
           {route.name === "main" && tab === "day" && (
             <DayView palette={palette} checkboxStyle={tweaks.checkboxStyle}
               habits={habitsWithStreak} toggleLog={toggleLog}
+              setCalorie={setCalorie}
+              caloriesGoal={tweaks.caloriesGoal || 0}
               categories={categories}
               currentDate={currentDate} setCurrentDate={setCurrentDate}
               onOpenHabit={(h) => setRoute({ name: "detail", habitId: h.id })}
@@ -2140,6 +2293,7 @@ function HabitApp({ tweaks, setTweak }) {
           {route.name === "main" && tab === "week" && (
             <WeekView palette={palette} checkboxStyle={tweaks.checkboxStyle}
               habits={habitsWithStreak} toggleLog={toggleLog}
+              caloriesGoal={tweaks.caloriesGoal || 0}
               currentDate={currentDate} setCurrentDate={setCurrentDate}
               onOpenHabit={(h) => setRoute({ name: "detail", habitId: h.id })}
             />
@@ -2147,6 +2301,7 @@ function HabitApp({ tweaks, setTweak }) {
           {route.name === "main" && tab === "month" && (
             <MonthView palette={palette} checkboxStyle={tweaks.checkboxStyle}
               habits={habitsWithStreak} toggleLog={toggleLog}
+              caloriesGoal={tweaks.caloriesGoal || 0}
               categories={categories}
               currentDate={currentDate} setCurrentDate={setCurrentDate}
               onOpenHabit={(h) => setRoute({ name: "detail", habitId: h.id })}
@@ -2220,6 +2375,7 @@ function HabitApp({ tweaks, setTweak }) {
                 streak: 0,
                 frozen: false,
                 logs: new Set(),
+                calories: {},
               }]);
               setTab("day");
             }}
@@ -2321,6 +2477,32 @@ function MenuSheet({ palette, tweaks, setTweak, onClose }) {
             </button>
           ))}
         </div>
+
+        <div style={{
+          fontFamily: 'Inter', fontSize: 9, letterSpacing: 2, color: p.goldDim,
+          textTransform: 'uppercase', marginBottom: 8, fontWeight: 600,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+        }}>
+          <span>Daily calorie goal</span>
+          <span style={{
+            fontFamily: 'JetBrains Mono', fontSize: 9, color: p.pearlDim,
+            letterSpacing: 0.5, textTransform: 'none',
+          }}>kcal</span>
+        </div>
+        <input
+          type="number" inputMode="numeric" min="0" step="50"
+          value={tweaks.caloriesGoal ?? 0}
+          onChange={(e) => {
+            const n = parseInt(e.target.value, 10);
+            setTweak('caloriesGoal', Number.isFinite(n) && n >= 0 ? n : 0);
+          }}
+          style={{
+            width: '100%', padding: '10px 12px', boxSizing: 'border-box',
+            background: p.bgRaised, border: `1px solid ${p.gold}33`,
+            color: p.pearl, fontFamily: 'JetBrains Mono, monospace',
+            fontSize: 16, outline: 'none', marginBottom: 18, textAlign: 'right',
+          }}
+        />
 
         <div style={{
           fontFamily: 'Inter', fontSize: 9, letterSpacing: 2, color: p.goldDim,
