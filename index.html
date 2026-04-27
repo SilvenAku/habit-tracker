@@ -1936,8 +1936,71 @@ const { useState: useStateA, useEffect: useEffectA } = React;
 
 const TWEAK_DEFAULTS = {
   "palette": "midnight",
-  "checkboxStyle": "rosette"
+  "checkboxStyle": "rosette",
+  "soundsEnabled": true
 };
+
+// ── Audio (synthesized; no files) ───────────────────────────────────────────
+let _audioCtx = null;
+function getAudioContext() {
+  if (!_audioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    try { _audioCtx = new Ctx(); } catch { return null; }
+  }
+  if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
+  return _audioCtx;
+}
+
+// Subtle flint/firelighter click — short filtered noise burst
+function playClick() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const dur = 0.07;
+  const len = Math.floor(ctx.sampleRate * dur);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) {
+    const t = i / ctx.sampleRate;
+    data[i] = (Math.random() * 2 - 1) * Math.exp(-t * 70);
+  }
+  const noise = ctx.createBufferSource();
+  noise.buffer = buf;
+  const hp = ctx.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 1400; hp.Q.value = 0.7;
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';  lp.frequency.value = 6000;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.18, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+  noise.connect(hp); hp.connect(lp); lp.connect(gain); gain.connect(ctx.destination);
+  noise.start(now);
+}
+
+// Wine-glass tinge — inharmonic sine partials with long decay
+function playGlass() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const partials = [
+    { freq:  932.33, gain: 0.10, decay: 1.6 },
+    { freq: 1864.66, gain: 0.20, decay: 1.4 },
+    { freq: 2793.83, gain: 0.13, decay: 1.1 },
+    { freq: 4698.64, gain: 0.06, decay: 0.7 },
+  ];
+  partials.forEach(p => {
+    const osc = ctx.createOscillator();
+    osc.type = 'sine'; osc.frequency.value = p.freq;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(p.gain, now + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + p.decay);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + p.decay + 0.05);
+  });
+}
 
 function HabitApp({ tweaks, setTweak }) {
   const palette = PALETTES[tweaks.palette] || PALETTES.midnight;
@@ -1996,8 +2059,12 @@ function HabitApp({ tweaks, setTweak }) {
       if (h.id !== habitId) return h;
       const logs = new Set(h.logs);
       const k = dateKey(date);
-      if (logs.has(k)) logs.delete(k);
-      else logs.add(k);
+      if (logs.has(k)) {
+        logs.delete(k);
+      } else {
+        logs.add(k);
+        if (tweaks.soundsEnabled !== false) playClick();
+      }
       return { ...h, logs };
     }));
   }
@@ -2009,6 +2076,7 @@ function HabitApp({ tweaks, setTweak }) {
     if (allKeptToday && !prevAllKeptRef.current) {
       setShowCelebration(true);
       navigator.vibrate?.([30, 70, 40, 70, 40, 70, 120]);
+      if (tweaks.soundsEnabled !== false) playGlass();
     }
     prevAllKeptRef.current = allKeptToday;
   }, [allKeptToday]);
@@ -2246,12 +2314,27 @@ function MenuSheet({ palette, tweaks, setTweak, onClose }) {
           fontFamily: 'Inter', fontSize: 9, letterSpacing: 2, color: p.goldDim,
           textTransform: 'uppercase', marginBottom: 8, fontWeight: 600,
         }}>Checkbox style</div>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 22 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
           {styleOpts.map(o => (
             <button key={o.value} onClick={() => setTweak('checkboxStyle', o.value)} style={chip(tweaks.checkboxStyle === o.value)}>
               {o.label}
             </button>
           ))}
+        </div>
+
+        <div style={{
+          fontFamily: 'Inter', fontSize: 9, letterSpacing: 2, color: p.goldDim,
+          textTransform: 'uppercase', marginBottom: 8, fontWeight: 600,
+        }}>Sounds</div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 22 }}>
+          <button onClick={() => {
+            setTweak('soundsEnabled', true);
+            // Prime the AudioContext inside this user gesture so the
+            // 100% chime can play later from a non-tap effect.
+            getAudioContext();
+          }} style={chip(tweaks.soundsEnabled !== false)}>On</button>
+          <button onClick={() => setTweak('soundsEnabled', false)}
+            style={chip(tweaks.soundsEnabled === false)}>Off</button>
         </div>
 
         <button onClick={onClose} style={{
