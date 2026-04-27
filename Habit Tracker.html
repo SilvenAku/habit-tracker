@@ -1,0 +1,2415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Habit Tracker — Dark Art Nouveau</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #050308;
+    font-family: Inter, system-ui, sans-serif;
+    color: #E8E1D1;
+  }
+  button { font: inherit; }
+  input, textarea { font-family: inherit; }
+  *::-webkit-scrollbar { width: 4px; height: 4px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: rgba(201, 169, 97, 0.2); }
+  *::-webkit-scrollbar-thumb:hover { background: rgba(201, 169, 97, 0.4); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+<!-- ============================================================ -->
+<!-- ios-frame.jsx — status bar                                    -->
+<!-- ============================================================ -->
+<script type="text/babel">
+function IOSStatusBar({ dark = false, time = '9:41' }) {
+  const c = dark ? '#fff' : '#000';
+  return (
+    <div style={{
+      display: 'flex', gap: 154, alignItems: 'center', justifyContent: 'center',
+      padding: '21px 24px 19px', boxSizing: 'border-box',
+      position: 'relative', zIndex: 20, width: '100%',
+    }}>
+      <div style={{ flex: 1, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 1.5 }}>
+        <span style={{
+          fontFamily: '-apple-system, "SF Pro", system-ui', fontWeight: 590,
+          fontSize: 17, lineHeight: '22px', color: c,
+        }}>{time}</span>
+      </div>
+      <div style={{ flex: 1, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, paddingTop: 1, paddingRight: 1 }}>
+        <svg width="19" height="12" viewBox="0 0 19 12">
+          <rect x="0" y="7.5" width="3.2" height="4.5" rx="0.7" fill={c}/>
+          <rect x="4.8" y="5" width="3.2" height="7" rx="0.7" fill={c}/>
+          <rect x="9.6" y="2.5" width="3.2" height="9.5" rx="0.7" fill={c}/>
+          <rect x="14.4" y="0" width="3.2" height="12" rx="0.7" fill={c}/>
+        </svg>
+        <svg width="17" height="12" viewBox="0 0 17 12">
+          <path d="M8.5 3.2C10.8 3.2 12.9 4.1 14.4 5.6L15.5 4.5C13.7 2.7 11.2 1.5 8.5 1.5C5.8 1.5 3.3 2.7 1.5 4.5L2.6 5.6C4.1 4.1 6.2 3.2 8.5 3.2Z" fill={c}/>
+          <path d="M8.5 6.8C9.9 6.8 11.1 7.3 12 8.2L13.1 7.1C11.8 5.9 10.2 5.1 8.5 5.1C6.8 5.1 5.2 5.9 3.9 7.1L5 8.2C5.9 7.3 7.1 6.8 8.5 6.8Z" fill={c}/>
+          <circle cx="8.5" cy="10.5" r="1.5" fill={c}/>
+        </svg>
+        <svg width="27" height="13" viewBox="0 0 27 13">
+          <rect x="0.5" y="0.5" width="23" height="12" rx="3.5" stroke={c} strokeOpacity="0.35" fill="none"/>
+          <rect x="2" y="2" width="20" height="9" rx="2" fill={c}/>
+          <path d="M25 4.5V8.5C25.8 8.2 26.5 7.2 26.5 6.5C26.5 5.8 25.8 4.8 25 4.5Z" fill={c} fillOpacity="0.4"/>
+        </svg>
+      </div>
+    </div>
+  );
+}
+window.IOSStatusBar = IOSStatusBar;
+</script>
+
+<!-- ============================================================ -->
+<!-- tweaks-panel.jsx — standalone version (auto-opens, no host)   -->
+<!-- ============================================================ -->
+<script type="text/babel">
+const __TWEAKS_STYLE = `
+  .twk-panel{position:fixed;right:16px;bottom:16px;z-index:2147483646;width:280px;
+    max-height:calc(100vh - 32px);display:flex;flex-direction:column;
+    background:rgba(250,249,247,.78);color:#29261b;
+    -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+    border:.5px solid rgba(255,255,255,.6);border-radius:14px;
+    box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 12px 40px rgba(0,0,0,.18);
+    font:11.5px/1.4 ui-sans-serif,system-ui,-apple-system,sans-serif;overflow:hidden}
+  .twk-hd{display:flex;align-items:center;justify-content:space-between;
+    padding:10px 8px 10px 14px;cursor:move;user-select:none}
+  .twk-hd b{font-size:12px;font-weight:600;letter-spacing:.01em}
+  .twk-x{appearance:none;border:0;background:transparent;color:rgba(41,38,27,.55);
+    width:22px;height:22px;border-radius:6px;cursor:pointer;font-size:13px;line-height:1}
+  .twk-x:hover{background:rgba(0,0,0,.06);color:#29261b}
+  .twk-body{padding:2px 14px 14px;display:flex;flex-direction:column;gap:10px;
+    overflow-y:auto;overflow-x:hidden;min-height:0}
+  .twk-row{display:flex;flex-direction:column;gap:5px}
+  .twk-row-h{flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
+  .twk-lbl{display:flex;justify-content:space-between;align-items:baseline;color:rgba(41,38,27,.72)}
+  .twk-lbl>span:first-child{font-weight:500}
+  .twk-sect{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    color:rgba(41,38,27,.45);padding:10px 0 0}
+  .twk-sect:first-child{padding-top:0}
+  .twk-seg{position:relative;display:flex;padding:2px;border-radius:8px;
+    background:rgba(0,0,0,.06);user-select:none}
+  .twk-seg-thumb{position:absolute;top:2px;bottom:2px;border-radius:6px;
+    background:rgba(255,255,255,.9);box-shadow:0 1px 2px rgba(0,0,0,.12);
+    transition:left .15s cubic-bezier(.3,.7,.4,1),width .15s}
+  .twk-seg.dragging .twk-seg-thumb{transition:none}
+  .twk-seg button{appearance:none;position:relative;z-index:1;flex:1;border:0;
+    background:transparent;color:inherit;font:inherit;font-weight:500;min-height:22px;
+    border-radius:6px;cursor:pointer;padding:4px 6px;line-height:1.2}
+  .twk-fab{position:fixed;right:16px;bottom:16px;z-index:2147483646;
+    width:40px;height:40px;border-radius:20px;border:.5px solid rgba(0,0,0,.1);
+    background:rgba(250,249,247,.92);color:#29261b;font-size:16px;cursor:pointer;
+    box-shadow:0 4px 12px rgba(0,0,0,.18);
+    -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+`;
+
+function useTweaks(defaults) {
+  const [values, setValues] = React.useState(defaults);
+  const setTweak = React.useCallback((keyOrEdits, val) => {
+    const edits = typeof keyOrEdits === 'object' && keyOrEdits !== null
+      ? keyOrEdits : { [keyOrEdits]: val };
+    setValues((prev) => ({ ...prev, ...edits }));
+  }, []);
+  return [values, setTweak];
+}
+
+function TweaksPanel({ title = 'Tweaks', children }) {
+  // Standalone: default open. User can close and re-open via FAB.
+  const [open, setOpen] = React.useState(true);
+  return (
+    <>
+      <style>{__TWEAKS_STYLE}</style>
+      {open ? (
+        <div className="twk-panel">
+          <div className="twk-hd">
+            <b>{title}</b>
+            <button className="twk-x" aria-label="Close tweaks" onClick={() => setOpen(false)}>✕</button>
+          </div>
+          <div className="twk-body">{children}</div>
+        </div>
+      ) : (
+        <button className="twk-fab" aria-label="Open tweaks" onClick={() => setOpen(true)}>⚙︎</button>
+      )}
+    </>
+  );
+}
+
+function TweakSection({ title, children }) {
+  return (
+    <>
+      <div className="twk-sect">{title}</div>
+      {children}
+    </>
+  );
+}
+
+function TweakRadio({ label, value, options, onChange }) {
+  const trackRef = React.useRef(null);
+  const [dragging, setDragging] = React.useState(false);
+  const opts = options.map((o) => (typeof o === 'object' ? o : { value: o, label: o }));
+  const idx = Math.max(0, opts.findIndex((o) => o.value === value));
+  const n = opts.length;
+  const valueRef = React.useRef(value);
+  valueRef.current = value;
+
+  const segAt = (clientX) => {
+    const r = trackRef.current.getBoundingClientRect();
+    const inner = r.width - 4;
+    const i = Math.floor(((clientX - r.left - 2) / inner) * n);
+    return opts[Math.max(0, Math.min(n - 1, i))].value;
+  };
+
+  const onPointerDown = (e) => {
+    setDragging(true);
+    const v0 = segAt(e.clientX);
+    if (v0 !== valueRef.current) onChange(v0);
+    const move = (ev) => {
+      if (!trackRef.current) return;
+      const v = segAt(ev.clientX);
+      if (v !== valueRef.current) onChange(v);
+    };
+    const up = () => {
+      setDragging(false);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  return (
+    <div className="twk-row">
+      {label && <div className="twk-lbl"><span>{label}</span></div>}
+      <div ref={trackRef} role="radiogroup" onPointerDown={onPointerDown}
+           className={dragging ? 'twk-seg dragging' : 'twk-seg'}>
+        <div className="twk-seg-thumb"
+             style={{ left: `calc(2px + ${idx} * (100% - 4px) / ${n})`,
+                      width: `calc((100% - 4px) / ${n})` }} />
+        {opts.map((o) => (
+          <button key={o.value} type="button" role="radio" aria-checked={o.value === value}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { useTweaks, TweaksPanel, TweakSection, TweakRadio });
+</script>
+
+<!-- ============================================================ -->
+<!-- design-system.jsx                                             -->
+<!-- ============================================================ -->
+<script type="text/babel">
+const PALETTES = {
+  midnight: {
+    name: "Midnight Obsidian",
+    bg:        "#0B0A12",
+    bgRaised:  "#13111C",
+    bgInset:   "#1A1726",
+    line:      "#2A2438",
+    lineSoft:  "#1F1B2A",
+    gold:      "#C9A961",
+    goldDim:   "#8C7544",
+    goldGlow:  "#E8C77A",
+    pearl:     "#E8E1D1",
+    pearlDim:  "#A89E89",
+    accent:    "#9B7BC4",
+    accentDim: "#6B5588",
+    frost:     "#7FA8C9",
+    flame:     "#D97843",
+  },
+  forest: {
+    name: "Verdigris Forest",
+    bg:        "#0A1310",
+    bgRaised:  "#0F1A15",
+    bgInset:   "#15211B",
+    line:      "#243329",
+    lineSoft:  "#1A251F",
+    gold:      "#B89855",
+    goldDim:   "#7E6938",
+    goldGlow:  "#D4B36A",
+    pearl:     "#E0DDC9",
+    pearlDim:  "#9A9580",
+    accent:    "#5BA88A",
+    accentDim: "#3F7560",
+    frost:     "#7FA8C9",
+    flame:     "#C97043",
+  },
+  burgundy: {
+    name: "Burgundy & Teal",
+    bg:        "#100A0E",
+    bgRaised:  "#1A1015",
+    bgInset:   "#22151C",
+    line:      "#3A2230",
+    lineSoft:  "#2A1A24",
+    gold:      "#C49A5C",
+    goldDim:   "#8A6B40",
+    goldGlow:  "#E0B872",
+    pearl:     "#EBD9CC",
+    pearlDim:  "#A89488",
+    accent:    "#3A8A8A",
+    accentDim: "#296060",
+    frost:     "#7FA8C9",
+    flame:     "#D8624A",
+  },
+  amethyst: {
+    name: "Obsidian & Amethyst",
+    bg:        "#0A0810",
+    bgRaised:  "#120F1C",
+    bgInset:   "#1A1528",
+    line:      "#2E2342",
+    lineSoft:  "#1F1830",
+    gold:      "#A89DBE",
+    goldDim:   "#766C8A",
+    goldGlow:  "#C7BCDC",
+    pearl:     "#E5DEEC",
+    pearlDim:  "#9A93A8",
+    accent:    "#B985D6",
+    accentDim: "#7E5A93",
+    frost:     "#8AB8DC",
+    flame:     "#D87A93",
+  },
+};
+
+function FlameGlyph({ size = 16, color = "#C9A961" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M12 2.5C12 6 8 8 8 12.5C8 16 9.8 18.5 12 18.5C14.2 18.5 16 16 16 12.5C16 11 15 10 14 10C14 7 12 5 12 2.5Z"
+        stroke={color} strokeWidth="1.2" strokeLinejoin="round" fill="none"/>
+      <path d="M12 21.5L12 19" stroke={color} strokeWidth="1.2" strokeLinecap="round"/>
+      <path d="M9 21.5L15 21.5" stroke={color} strokeWidth="1.2" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function FrostGlyph({ size = 16, color = "#7FA8C9" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9" stroke={color} strokeWidth="1" strokeLinecap="round"/>
+      <circle cx="12" cy="12" r="2" stroke={color} strokeWidth="1" fill="none"/>
+      <path d="M12 3l-1.5 2M12 3l1.5 2M12 21l-1.5-2M12 21l1.5-2M4.2 7.5l2 .3M4.2 7.5l.3 2M19.8 16.5l-2-.3M19.8 16.5l-.3-2M19.8 7.5l-2 .3M19.8 7.5l-.3 2M4.2 16.5l2-.3M4.2 16.5l.3-2"
+        stroke={color} strokeWidth="1" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function CheckGlyph({ size = 16, color = "#C9A961" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M5 12.5L10 17.5L19 7" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+function FrameGlyph({ size = 28, color = "#C9A961", strokeWidth = 1 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
+      <rect x="2" y="2" width="24" height="24" stroke={color} strokeWidth={strokeWidth}/>
+      <rect x="5" y="5" width="18" height="18" stroke={color} strokeWidth={strokeWidth * 0.6} opacity="0.6"/>
+      <path d="M2 6L6 2M22 2L26 6M2 22L6 26M22 26L26 22" stroke={color} strokeWidth={strokeWidth * 0.6} opacity="0.5"/>
+    </svg>
+  );
+}
+
+function RosetteGlyph({ size = 28, color = "#C9A961", glow = "#E8C77A" }) {
+  const id = `rose-${color.slice(1)}-${Math.random().toString(36).slice(2, 8)}`;
+  return (
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
+      <defs>
+        <radialGradient id={id} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={glow} stopOpacity="0.95"/>
+          <stop offset="100%" stopColor={color} stopOpacity="0.85"/>
+        </radialGradient>
+      </defs>
+      <rect x="2" y="2" width="24" height="24" fill={`url(#${id})`}/>
+      <g stroke="#0B0A12" strokeWidth="0.6" opacity="0.65" fill="none">
+        <rect x="6" y="6" width="16" height="16"/>
+        <rect x="10" y="10" width="8" height="8"/>
+        <line x1="14" y1="2" x2="14" y2="26"/>
+        <line x1="2" y1="14" x2="26" y2="14"/>
+        <line x1="6" y1="6" x2="10" y2="10"/>
+        <line x1="22" y1="6" x2="18" y2="10"/>
+        <line x1="6" y1="22" x2="10" y2="18"/>
+        <line x1="22" y1="22" x2="18" y2="18"/>
+      </g>
+      <circle cx="14" cy="14" r="2" fill="#0B0A12" opacity="0.55"/>
+    </svg>
+  );
+}
+
+function StainedGlassCell({ size = 28, color = "#C9A961", filled = false, accent = "#9B7BC4" }) {
+  if (!filled) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
+        <rect x="2" y="2" width="24" height="24" stroke={color} strokeWidth="1" opacity="0.6"/>
+        <path d="M2 14L26 14M14 2L14 26M2 2L26 26M2 26L26 2" stroke={color} strokeWidth="0.4" opacity="0.25"/>
+      </svg>
+    );
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
+      <rect x="2" y="2" width="24" height="24" fill={accent} opacity="0.35"/>
+      <path d="M2 2L14 14L2 26Z" fill={color} opacity="0.55"/>
+      <path d="M26 2L14 14L26 26Z" fill={color} opacity="0.4"/>
+      <path d="M2 2L14 14L26 2Z" fill={accent} opacity="0.5"/>
+      <path d="M2 26L14 14L26 26Z" fill={color} opacity="0.3"/>
+      <path d="M2 14L26 14M14 2L14 26M2 2L26 26M2 26L26 2" stroke="#0B0A12" strokeWidth="0.6"/>
+      <rect x="2" y="2" width="24" height="24" stroke={color} strokeWidth="1"/>
+    </svg>
+  );
+}
+
+function EngravedTile({ size = 28, color = "#C9A961", filled = false, glow = "#E8C77A" }) {
+  if (!filled) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
+        <rect x="2" y="2" width="24" height="24" stroke={color} strokeWidth="1" opacity="0.55"/>
+        <rect x="6" y="6" width="16" height="16" stroke={color} strokeWidth="0.5" opacity="0.4"/>
+      </svg>
+    );
+  }
+  const id = `gold-${color.slice(1)}-${Math.random().toString(36).slice(2, 8)}`;
+  return (
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor={glow}/>
+          <stop offset="100%" stopColor={color}/>
+        </linearGradient>
+      </defs>
+      <rect x="2" y="2" width="24" height="24" fill={`url(#${id})`}/>
+      <rect x="6" y="6" width="16" height="16" stroke="#0B0A12" strokeWidth="0.5" opacity="0.5" fill="none"/>
+      <path d="M14 8L14 20M8 14L20 14" stroke="#0B0A12" strokeWidth="0.5" opacity="0.5"/>
+      <rect x="2" y="2" width="24" height="24" stroke={color} strokeWidth="1"/>
+    </svg>
+  );
+}
+
+function CandleCheck({ size = 28, color = "#C9A961", filled = false, glow = "#E8C77A", accent = "#D97843" }) {
+  if (!filled) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
+        <rect x="2" y="2" width="24" height="24" stroke={color} strokeWidth="1" opacity="0.6"/>
+        <line x1="14" y1="10" x2="14" y2="20" stroke={color} strokeWidth="1" opacity="0.5"/>
+        <circle cx="14" cy="9" r="1" fill={color} opacity="0.5"/>
+      </svg>
+    );
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
+      <rect x="2" y="2" width="24" height="24" stroke={color} strokeWidth="1"/>
+      <rect x="2" y="2" width="24" height="24" fill={glow} opacity="0.08"/>
+      <path d="M14 6C14 8.5 11 9.5 11 12.5C11 14.5 12.3 16 14 16C15.7 16 17 14.5 17 12.5C17 11.3 16.3 10.7 15.7 10.7C15.7 8.7 14.5 7.5 14 6Z"
+        fill={accent} opacity="0.85"/>
+      <path d="M14 8C14 9.5 12.5 10 12.5 12C12.5 13.2 13.2 14 14 14C14.8 14 15.5 13.2 15.5 12C15.5 11.3 15.2 11 14.8 11C14.8 9.8 14.3 9 14 8Z"
+        fill={glow} opacity="0.95"/>
+      <line x1="14" y1="16" x2="14" y2="20" stroke={color} strokeWidth="1.2"/>
+    </svg>
+  );
+}
+
+function CornerOrnament({ size = 16, color = "#C9A961", rotate = 0 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ transform: `rotate(${rotate}deg)` }}>
+      <path d="M0 0L16 0L16 1L1 1L1 16L0 16L0 0Z" fill={color} opacity="0.7"/>
+      <rect x="3" y="3" width="3" height="3" fill={color} opacity="0.5"/>
+    </svg>
+  );
+}
+
+function OrnateDivider({ color = "#C9A961", width = "100%", style = {} }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, width, ...style }}>
+      <div style={{ flex: 1, height: 1, background: `linear-gradient(to right, transparent, ${color}55, ${color}88)` }}/>
+      <svg width="20" height="10" viewBox="0 0 20 10">
+        <rect x="9" y="1" width="2" height="2" fill={color}/>
+        <rect x="9" y="7" width="2" height="2" fill={color}/>
+        <rect x="3" y="4" width="2" height="2" fill={color} opacity="0.7"/>
+        <rect x="15" y="4" width="2" height="2" fill={color} opacity="0.7"/>
+        <line x1="0" y1="5" x2="20" y2="5" stroke={color} strokeWidth="0.5" opacity="0.5"/>
+      </svg>
+      <div style={{ flex: 1, height: 1, background: `linear-gradient(to left, transparent, ${color}55, ${color}88)` }}/>
+    </div>
+  );
+}
+
+function SecessionFrame({ children, color = "#C9A961", style = {}, padding = 16 }) {
+  return (
+    <div style={{ position: 'relative', padding, ...style }}>
+      <div style={{ position: 'absolute', inset: 0, border: `1px solid ${color}55` }}/>
+      <div style={{ position: 'absolute', inset: 4, border: `0.5px solid ${color}33` }}/>
+      {[
+        {top: -3, left: -3}, {top: -3, right: -3},
+        {bottom: -3, left: -3}, {bottom: -3, right: -3},
+      ].map((pos, i) => (
+        <div key={i} style={{ position: 'absolute', width: 6, height: 6, background: color, ...pos }}/>
+      ))}
+      <div style={{ position: 'relative' }}>{children}</div>
+    </div>
+  );
+}
+
+function HabitGlyph({ name, size = 18, color = "#C9A961" }) {
+  const glyphs = {
+    meditation: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="8" r="2.5" stroke={color} strokeWidth="1.2"/>
+        <path d="M6 20C6 16 8.5 13.5 12 13.5C15.5 13.5 18 16 18 20" stroke={color} strokeWidth="1.2"/>
+        <path d="M3 18L6 18M18 18L21 18" stroke={color} strokeWidth="1.2"/>
+      </svg>
+    ),
+    reading: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M3 5L12 7L12 21L3 19L3 5Z" stroke={color} strokeWidth="1.2" strokeLinejoin="round"/>
+        <path d="M21 5L12 7L12 21L21 19L21 5Z" stroke={color} strokeWidth="1.2" strokeLinejoin="round"/>
+        <line x1="12" y1="7" x2="12" y2="21" stroke={color} strokeWidth="1.2"/>
+      </svg>
+    ),
+    sport: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <rect x="2" y="9" width="3" height="6" stroke={color} strokeWidth="1.2"/>
+        <rect x="19" y="9" width="3" height="6" stroke={color} strokeWidth="1.2"/>
+        <rect x="6" y="6" width="3" height="12" stroke={color} strokeWidth="1.2"/>
+        <rect x="15" y="6" width="3" height="12" stroke={color} strokeWidth="1.2"/>
+        <line x1="9" y1="12" x2="15" y2="12" stroke={color} strokeWidth="1.2"/>
+      </svg>
+    ),
+    water: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M12 3L18 12C18 16 15 19 12 19C9 19 6 16 6 12L12 3Z" stroke={color} strokeWidth="1.2" strokeLinejoin="round"/>
+      </svg>
+    ),
+    creativity: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <rect x="4" y="4" width="16" height="16" stroke={color} strokeWidth="1.2" transform="rotate(45 12 12)"/>
+        <circle cx="12" cy="12" r="3" stroke={color} strokeWidth="1.2"/>
+      </svg>
+    ),
+    sleep: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M19 13C18 17 14 20 9 19C5 18 3 14 4 10C5 7 8 5 11 5C9 7 9 11 11 13C13 15 17 15 19 13Z"
+          stroke={color} strokeWidth="1.2" strokeLinejoin="round"/>
+      </svg>
+    ),
+    writing: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M4 20L20 4M16 4L20 4L20 8" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M4 16L4 20L8 20" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M14 6L18 10" stroke={color} strokeWidth="1.2"/>
+      </svg>
+    ),
+    social: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <circle cx="9" cy="9" r="3" stroke={color} strokeWidth="1.2"/>
+        <circle cx="16" cy="11" r="2.5" stroke={color} strokeWidth="1.2"/>
+        <path d="M3 19C3 16 5.5 14 9 14C12.5 14 15 16 15 19" stroke={color} strokeWidth="1.2"/>
+        <path d="M14 18C14 16 17 15 19 15.5" stroke={color} strokeWidth="1.2"/>
+      </svg>
+    ),
+  };
+  return glyphs[name] || glyphs.creativity;
+}
+
+Object.assign(window, {
+  PALETTES,
+  FlameGlyph, FrostGlyph, CheckGlyph,
+  FrameGlyph, RosetteGlyph, StainedGlassCell, EngravedTile, CandleCheck,
+  CornerOrnament, OrnateDivider, SecessionFrame, HabitGlyph,
+});
+</script>
+
+<!-- ============================================================ -->
+<!-- checkbox.jsx                                                  -->
+<!-- ============================================================ -->
+<script type="text/babel">
+function HabitCheckbox({ checked, style = "rosette", palette, size = 36, onClick, frozen = false }) {
+  const p = palette;
+  const wrap = (inner) => (
+    <button
+      onClick={onClick}
+      style={{
+        width: size, height: size, padding: 0, border: 'none',
+        background: 'transparent', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        position: 'relative',
+      }}
+    >
+      {inner}
+      {checked && (
+        <div style={{
+          position: 'absolute', inset: -4, pointerEvents: 'none',
+          background: `radial-gradient(circle, ${p.goldGlow}22 0%, transparent 60%)`,
+        }}/>
+      )}
+    </button>
+  );
+
+  if (frozen && !checked) {
+    return wrap(
+      <svg width={size - 4} height={size - 4} viewBox="0 0 28 28" fill="none">
+        <rect x="2" y="2" width="24" height="24" stroke={p.frost} strokeWidth="1" opacity="0.7"/>
+        <FrostGlyph size={size - 12} color={p.frost} />
+      </svg>
+    );
+  }
+
+  if (style === "rosette") {
+    return wrap(checked
+      ? <RosetteGlyph size={size - 4} color={p.gold} glow={p.goldGlow}/>
+      : <FrameGlyph size={size - 4} color={p.gold}/>
+    );
+  }
+  if (style === "stained") {
+    return wrap(<StainedGlassCell size={size - 4} color={p.gold} accent={p.accent} filled={checked}/>);
+  }
+  if (style === "engraved") {
+    return wrap(<EngravedTile size={size - 4} color={p.gold} glow={p.goldGlow} filled={checked}/>);
+  }
+  if (style === "candle") {
+    return wrap(<CandleCheck size={size - 4} color={p.gold} glow={p.goldGlow} accent={p.flame} filled={checked}/>);
+  }
+  return null;
+}
+
+function HabitCell({ checked, style = "rosette", palette, size = 32, onClick, isToday = false, frozen = false, dim = false }) {
+  const p = palette;
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width: size, height: size, padding: 0,
+        border: isToday ? `1px solid ${p.accent}` : 'none',
+        background: 'transparent', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        opacity: dim ? 0.35 : 1,
+        position: 'relative',
+      }}
+    >
+      <HabitCheckbox
+        checked={checked} style={style} palette={p}
+        size={size - 4} onClick={(e) => { e.stopPropagation(); onClick?.(e); }}
+        frozen={frozen}
+      />
+    </button>
+  );
+}
+
+Object.assign(window, { HabitCheckbox, HabitCell });
+</script>
+
+<!-- ============================================================ -->
+<!-- data.jsx                                                      -->
+<!-- ============================================================ -->
+<script type="text/babel">
+const TODAY = new Date(2026, 3, 27); // April 27, 2026 (Mon)
+
+const APP_OPTIONS = [
+  "Instagram", "TikTok", "YouTube", "X", "Reddit",
+  "Facebook", "Snapchat", "WhatsApp", "Discord",
+  "Twitch", "Netflix", "Safari",
+];
+
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function addDays(d, n) {
+  const r = new Date(d); r.setDate(r.getDate()+n); return r;
+}
+function startOfWeek(d) {
+  const r = new Date(d);
+  const day = (r.getDay() + 6) % 7;
+  r.setDate(r.getDate() - day);
+  return r;
+}
+
+const HABITS = [
+  {
+    id: "meditation",
+    name: "Meditation",
+    category: "Mindfulness",
+    glyph: "meditation",
+    frequency: "Daily",
+    when: "Morning, 7:00",
+    where: "Living room cushion",
+    why: "Quiet the noise before the day begins",
+    duration: "15 minutes",
+    trigger: "After making coffee",
+    streak: 12,
+    frozen: false,
+    logs: (() => {
+      const s = new Set();
+      for (let i = 0; i < 12; i++) s.add(dateKey(addDays(TODAY, -i)));
+      for (let i = 13; i < 90; i++) if (Math.random() < 0.7) s.add(dateKey(addDays(TODAY, -i)));
+      return s;
+    })(),
+  },
+  {
+    id: "reading",
+    name: "Read 20 pages",
+    category: "Learning",
+    glyph: "reading",
+    frequency: "Daily",
+    when: "Evening, 21:00",
+    where: "Reading chair",
+    why: "One book a month, every month",
+    duration: "20 pages",
+    trigger: "After dinner",
+    streak: 5,
+    frozen: false,
+    logs: (() => {
+      const s = new Set();
+      for (let i = 0; i < 5; i++) s.add(dateKey(addDays(TODAY, -i)));
+      for (let i = 7; i < 90; i++) if (Math.random() < 0.6) s.add(dateKey(addDays(TODAY, -i)));
+      return s;
+    })(),
+  },
+  {
+    id: "sport",
+    name: "Strength training",
+    category: "Fitness",
+    glyph: "sport",
+    frequency: "3× per week",
+    when: "After work",
+    where: "Home gym",
+    why: "Stay strong into my 50s",
+    duration: "45 minutes",
+    trigger: "Change clothes immediately after work",
+    streak: 0,
+    frozen: true,
+    logs: (() => {
+      const s = new Set();
+      s.add(dateKey(addDays(TODAY, -1)));
+      s.add(dateKey(addDays(TODAY, -3)));
+      s.add(dateKey(addDays(TODAY, -5)));
+      for (let i = 7; i < 90; i++) if (Math.random() < 0.4) s.add(dateKey(addDays(TODAY, -i)));
+      return s;
+    })(),
+  },
+  {
+    id: "water",
+    name: "Drink 2L water",
+    category: "Health",
+    glyph: "water",
+    frequency: "Daily",
+    when: "Throughout day",
+    where: "Anywhere",
+    why: "Stop the headaches",
+    duration: "2 liters",
+    trigger: "Fill bottle at desk each morning",
+    streak: 23,
+    frozen: false,
+    logs: (() => {
+      const s = new Set();
+      for (let i = 0; i < 23; i++) s.add(dateKey(addDays(TODAY, -i)));
+      for (let i = 24; i < 90; i++) if (Math.random() < 0.85) s.add(dateKey(addDays(TODAY, -i)));
+      return s;
+    })(),
+  },
+  {
+    id: "writing",
+    name: "Morning pages",
+    category: "Creativity",
+    glyph: "writing",
+    frequency: "Weekdays",
+    when: "Morning, 6:30",
+    where: "Kitchen table",
+    why: "Clear the mental fog",
+    duration: "3 pages, longhand",
+    trigger: "Coffee timer beeps",
+    streak: 8,
+    frozen: false,
+    logs: (() => {
+      const s = new Set();
+      for (let i = 0; i < 8; i++) {
+        const d = addDays(TODAY, -i);
+        if (d.getDay() !== 0 && d.getDay() !== 6) s.add(dateKey(d));
+      }
+      for (let i = 10; i < 90; i++) if (Math.random() < 0.55) s.add(dateKey(addDays(TODAY, -i)));
+      return s;
+    })(),
+  },
+];
+
+function isLogged(habit, d) { return habit.logs.has(dateKey(d)); }
+
+Object.assign(window, { TODAY, HABITS, APP_OPTIONS, dateKey, addDays, startOfWeek, isLogged });
+</script>
+
+<!-- ============================================================ -->
+<!-- views.jsx — Day, Week, Month                                  -->
+<!-- ============================================================ -->
+<script type="text/babel">
+const { useState, useMemo, useEffect } = React;
+
+function ViewHeader({ palette, eyebrow, title, subtitle, onBack, right }) {
+  const p = palette;
+  return (
+    <div style={{ padding: '14px 24px 8px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 28 }}>
+        {onBack ? (
+          <button onClick={onBack} style={{
+            background: 'transparent', border: 'none', padding: '4px 0', cursor: 'pointer',
+            color: p.gold, fontFamily: 'Inter', fontSize: 13, letterSpacing: 1.5, textTransform: 'uppercase',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <span style={{ fontSize: 16, lineHeight: 1 }}>‹</span> Back
+          </button>
+        ) : (
+          <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: 2.5, textTransform: 'uppercase', color: p.goldDim, fontWeight: 500 }}>
+            {eyebrow}
+          </div>
+        )}
+        {right}
+      </div>
+      <div style={{
+        fontFamily: '"Cormorant Garamond", serif', fontSize: 36, lineHeight: 1.05,
+        color: p.pearl, fontWeight: 400, marginTop: 6, letterSpacing: -0.5,
+      }}>
+        {title}
+      </div>
+      {subtitle && (
+        <div style={{ fontFamily: 'Inter', fontSize: 13, color: p.pearlDim, marginTop: 4 }}>
+          {subtitle}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DayView({ palette, checkboxStyle, habits, toggleLog, categories = [], currentDate, setCurrentDate, onOpenHabit, onOpenDate }) {
+  const p = palette;
+  const isToday = dateKey(currentDate) === dateKey(TODAY);
+  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const dayNames = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+  const [filterCategory, setFilterCategory] = useState("__all");
+  useEffect(() => {
+    if (filterCategory !== "__all" && !categories.includes(filterCategory)) {
+      setFilterCategory("__all");
+    }
+  }, [categories, filterCategory]);
+
+  const visibleHabits = filterCategory === "__all"
+    ? habits
+    : habits.filter(h => h.category === filterCategory);
+
+  const completed = visibleHabits.filter(h => isLogged(h, currentDate)).length;
+  const pct = visibleHabits.length > 0 ? Math.round(completed / visibleHabits.length * 100) : 0;
+
+  return (
+    <div style={{ minHeight: '100%', paddingBottom: 100 }}>
+      <ViewHeader
+        palette={p}
+        eyebrow={isToday ? "Today" : dayNames[currentDate.getDay()]}
+        title={`${dayNames[currentDate.getDay()]}, ${currentDate.getDate()} ${monthNames[currentDate.getMonth()]}`}
+        subtitle={`${completed} of ${habits.length} kept · ${pct}%`}
+        right={
+          <button onClick={onOpenDate} style={{
+            background: 'transparent', border: `1px solid ${p.gold}55`, padding: '6px 12px',
+            color: p.gold, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, cursor: 'pointer',
+            letterSpacing: 1,
+          }}>
+            {currentDate.getFullYear()}.{String(currentDate.getMonth()+1).padStart(2,'0')}.{String(currentDate.getDate()).padStart(2,'0')}
+          </button>
+        }
+      />
+
+      <div style={{ padding: '4px 24px 16px' }}>
+        <div style={{ height: 2, background: `${p.gold}22`, position: 'relative' }}>
+          <div style={{
+            position: 'absolute', left: 0, top: 0, height: '100%',
+            width: `${pct}%`, background: `linear-gradient(to right, ${p.goldDim}, ${p.gold})`,
+            boxShadow: `0 0 8px ${p.gold}66`,
+          }}/>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+          <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: p.goldDim, letterSpacing: 1 }}>00</div>
+          <div style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: p.goldDim, letterSpacing: 1 }}>{visibleHabits.length.toString().padStart(2,'0')}</div>
+        </div>
+      </div>
+
+      <OrnateDivider color={p.gold} style={{ padding: '0 24px', marginBottom: 16 }}/>
+
+      <div style={{
+        padding: '0 24px', marginBottom: 16, display: 'flex', gap: 6, overflowX: 'auto',
+      }}>
+        {[{ value: "__all", label: "All" }, ...categories.map(c => ({ value: c, label: c }))].map(opt => {
+          const sel = filterCategory === opt.value;
+          return (
+            <button key={opt.value} onClick={() => setFilterCategory(opt.value)} style={{
+              padding: '6px 12px', whiteSpace: 'nowrap',
+              background: sel ? `${p.gold}15` : 'transparent',
+              border: `1px solid ${sel ? p.gold : p.gold + '33'}`,
+              color: sel ? p.gold : p.pearlDim,
+              fontFamily: 'Inter', fontSize: 11, letterSpacing: 1,
+              textTransform: 'uppercase', cursor: 'pointer', fontWeight: 500,
+            }}>{opt.label}</button>
+          );
+        })}
+      </div>
+
+      <div style={{ padding: '0 24px', display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {visibleHabits.length === 0 && (
+          <div style={{
+            fontFamily: '"Cormorant Garamond", serif', fontSize: 17,
+            color: p.pearlDim, textAlign: 'center', padding: '24px 0',
+            fontStyle: 'italic',
+          }}>No habits in this category.</div>
+        )}
+        {visibleHabits.map((h, i) => {
+          const checked = isLogged(h, currentDate);
+          return (
+            <div key={h.id}>
+              <div
+                onClick={() => onOpenHabit(h)}
+                style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '18px 0', cursor: 'pointer' }}
+              >
+                <HabitCheckbox
+                  checked={checked} style={checkboxStyle} palette={p} size={44}
+                  frozen={h.frozen && !checked}
+                  onClick={(e) => { e.stopPropagation(); toggleLog(h.id, currentDate); }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <HabitGlyph name={h.glyph} size={14} color={p.goldDim}/>
+                    <div style={{
+                      fontFamily: '"Cormorant Garamond", serif', fontSize: 22,
+                      color: p.pearl, fontWeight: 400, letterSpacing: 0.2,
+                    }}>{h.name}</div>
+                  </div>
+                  <div style={{
+                    fontFamily: 'Inter', fontSize: 11, color: p.pearlDim,
+                    letterSpacing: 1.2, textTransform: 'uppercase', marginTop: 3, marginLeft: 22,
+                  }}>
+                    {h.category} · {h.frequency}
+                  </div>
+                  {h.blockApps && h.blockApps.length > 0 && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 5,
+                      marginTop: 4, marginLeft: 22,
+                      color: checked ? p.pearlDim : p.accent,
+                      opacity: checked ? 0.6 : 1,
+                    }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                        {checked
+                          ? <path d="M5 11h14v10H5zM8 11V7a4 4 0 018 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                          : <><rect x="5" y="11" width="14" height="10" rx="1" stroke="currentColor" strokeWidth="2"/><path d="M8 11V7a4 4 0 018 0v4" stroke="currentColor" strokeWidth="2"/></>
+                        }
+                      </svg>
+                      <span style={{
+                        fontFamily: 'Inter', fontSize: 10, letterSpacing: 1,
+                        textTransform: 'uppercase', fontWeight: 500,
+                      }}>
+                        {checked
+                          ? `${h.blockApps.length} app${h.blockApps.length === 1 ? '' : 's'} unlocked`
+                          : `Locks ${h.blockApps.length} app${h.blockApps.length === 1 ? '' : 's'}`}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '4px 8px',
+                  border: `1px solid ${(h.frozen ? p.frost : p.gold)}44`,
+                  background: `${(h.frozen ? p.frost : p.gold)}0D`,
+                }}>
+                  {h.frozen
+                    ? <FrostGlyph size={12} color={p.frost}/>
+                    : <FlameGlyph size={12} color={h.streak > 0 ? p.flame : p.pearlDim}/>
+                  }
+                  <span style={{
+                    fontFamily: 'JetBrains Mono', fontSize: 11,
+                    color: h.frozen ? p.frost : (h.streak > 0 ? p.gold : p.pearlDim),
+                    letterSpacing: 0.5,
+                  }}>
+                    {h.streak.toString().padStart(2,'0')}
+                  </span>
+                </div>
+              </div>
+              {i < visibleHabits.length - 1 && <div style={{ height: 1, background: `${p.gold}1A` }}/>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function navBtn(p) {
+  return {
+    width: 28, height: 28, padding: 0,
+    background: 'transparent', border: `1px solid ${p.gold}55`,
+    color: p.gold, fontFamily: 'serif', fontSize: 16, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  };
+}
+
+function WeekView({ palette, checkboxStyle, habits, toggleLog, currentDate, setCurrentDate, onOpenHabit }) {
+  const p = palette;
+  const weekStart = startOfWeek(currentDate);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const dayLetters = ["M","T","W","T","F","S","S"];
+
+  const weekNum = (() => {
+    const d = new Date(weekStart);
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    return Math.ceil((((d - yearStart) / 86400000) + yearStart.getDay() + 1) / 7);
+  })();
+
+  const cellSize = 36;
+
+  return (
+    <div style={{ minHeight: '100%', paddingBottom: 100 }}>
+      <ViewHeader
+        palette={p}
+        eyebrow={`Week ${weekNum}`}
+        title={`${weekStart.getDate()} ${monthNames[weekStart.getMonth()]} – ${addDays(weekStart, 6).getDate()} ${monthNames[addDays(weekStart, 6).getMonth()]}`}
+        right={
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => setCurrentDate(addDays(weekStart, -1))} style={navBtn(p)}>‹</button>
+            <button onClick={() => setCurrentDate(addDays(weekStart, 7))} style={navBtn(p)}>›</button>
+          </div>
+        }
+      />
+
+      <OrnateDivider color={p.gold} style={{ padding: '0 24px', margin: '12px 0 16px' }}/>
+
+      <div style={{ padding: '0 18px', display: 'flex', gap: 6, marginBottom: 8 }}>
+        <div style={{ width: 64 }}/>
+        {days.map((d, i) => {
+          const today = dateKey(d) === dateKey(TODAY);
+          return (
+            <div key={i} style={{ width: cellSize, textAlign: 'center' }}>
+              <div style={{
+                fontFamily: 'Inter', fontSize: 10, letterSpacing: 1,
+                color: today ? p.accent : p.pearlDim, textTransform: 'uppercase',
+                fontWeight: 600,
+              }}>{dayLetters[i]}</div>
+              <div style={{
+                fontFamily: 'JetBrains Mono', fontSize: 12,
+                color: today ? p.accent : p.gold, marginTop: 2,
+                fontWeight: today ? 700 : 400,
+              }}>{d.getDate()}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ padding: '0 18px' }}>
+        {habits.map((h, hi) => {
+          const completedCount = days.filter(d => isLogged(h, d)).length;
+          const rate = completedCount / 7;
+          return (
+            <div key={h.id} style={{
+              padding: '8px 0',
+              borderTop: hi > 0 ? `1px solid ${p.gold}1A` : 'none',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div onClick={() => onOpenHabit(h)} style={{ width: 64, cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <HabitGlyph name={h.glyph} size={11} color={p.goldDim}/>
+                    <div style={{
+                      fontFamily: '"Cormorant Garamond", serif', fontSize: 14,
+                      color: p.pearl, lineHeight: 1.1, fontWeight: 500,
+                    }}>{h.name.split(' ').slice(0,2).join(' ')}</div>
+                  </div>
+                  <div style={{
+                    fontFamily: 'JetBrains Mono', fontSize: 9, color: p.goldDim,
+                    marginTop: 3, letterSpacing: 0.5,
+                  }}>{completedCount}/7</div>
+                </div>
+                {days.map((d, di) => {
+                  const checked = isLogged(h, d);
+                  const isFuture = d > TODAY;
+                  const today = dateKey(d) === dateKey(TODAY);
+                  return (
+                    <HabitCell
+                      key={di}
+                      checked={checked}
+                      style={checkboxStyle}
+                      palette={p}
+                      size={cellSize}
+                      isToday={today}
+                      dim={isFuture}
+                      onClick={() => !isFuture && toggleLog(h.id, d)}
+                    />
+                  );
+                })}
+              </div>
+              <div style={{
+                height: 1, background: `${p.gold}15`, marginLeft: 70, marginTop: 4,
+                position: 'relative',
+              }}>
+                <div style={{
+                  position: 'absolute', left: 0, top: -0.5, height: 2,
+                  width: `${rate * 100}%`,
+                  background: rate === 1 ? p.goldGlow : p.gold,
+                  opacity: 0.7,
+                }}/>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MonthView({ palette, checkboxStyle, habits, toggleLog, categories = [], currentDate, setCurrentDate, onOpenHabit }) {
+  const p = palette;
+  const [filterCategory, setFilterCategory] = useState("__all");
+  useEffect(() => {
+    if (filterCategory !== "__all" && !categories.includes(filterCategory)) {
+      setFilterCategory("__all");
+    }
+  }, [categories, filterCategory]);
+
+  const visibleHabits = filterCategory === "__all"
+    ? habits
+    : habits.filter(h => h.category === filterCategory);
+
+  const isAnyLogged = (d) => visibleHabits.some(h => isLogged(h, d));
+  const groupLabel = filterCategory === "__all" ? "All habits" : filterCategory;
+
+  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  const firstOfMonth = new Date(year, month, 1);
+  const startOffset = (firstOfMonth.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startOffset; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const completed = cells.filter(d => d && isAnyLogged(d)).length;
+  const totalSoFar = cells.filter(d => d && d <= TODAY && d.getMonth() === month).length;
+  const pct = totalSoFar > 0 ? Math.round(completed / totalSoFar * 100) : 0;
+
+  const longestStreak = (() => {
+    let best = 0, cur = 0;
+    for (const d of cells) {
+      if (!d) continue;
+      if (isAnyLogged(d)) { cur++; best = Math.max(best, cur); }
+      else cur = 0;
+    }
+    return best;
+  })();
+
+  return (
+    <div style={{ minHeight: '100%', paddingBottom: 100 }}>
+      <ViewHeader
+        palette={p}
+        eyebrow={`Year ${year}`}
+        title={`${monthNames[month]}`}
+        right={
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} style={navBtn(p)}>‹</button>
+            <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} style={navBtn(p)}>›</button>
+          </div>
+        }
+      />
+
+      <div style={{
+        padding: '0 24px', marginTop: 14, display: 'flex', gap: 6, overflowX: 'auto',
+      }}>
+        {[{ value: "__all", label: "All" }, ...categories.map(c => ({ value: c, label: c }))].map(opt => {
+          const sel = filterCategory === opt.value;
+          return (
+            <button key={opt.value} onClick={() => setFilterCategory(opt.value)} style={{
+              padding: '6px 12px', whiteSpace: 'nowrap',
+              background: sel ? `${p.gold}15` : 'transparent',
+              border: `1px solid ${sel ? p.gold : p.gold + '33'}`,
+              color: sel ? p.gold : p.pearlDim,
+              fontFamily: 'Inter', fontSize: 11, letterSpacing: 1,
+              textTransform: 'uppercase', cursor: 'pointer', fontWeight: 500,
+            }}>{opt.label}</button>
+          );
+        })}
+      </div>
+
+      <OrnateDivider color={p.gold} style={{ padding: '0 24px', margin: '20px 0 16px' }}/>
+
+      <div style={{ padding: '0 24px', display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 8 }}>
+        {["M","T","W","T","F","S","S"].map((l, i) => (
+          <div key={i} style={{
+            fontFamily: 'Inter', fontSize: 10, color: p.goldDim, textAlign: 'center',
+            letterSpacing: 1, fontWeight: 600,
+          }}>{l}</div>
+        ))}
+      </div>
+
+      <div style={{ padding: '0 24px', display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+        {cells.map((d, i) => {
+          if (!d) return <div key={i} style={{ aspectRatio: '1' }}/>;
+          const checked = isAnyLogged(d);
+          const today = dateKey(d) === dateKey(TODAY);
+          const isFuture = d > TODAY;
+          return (
+            <div
+              key={i}
+              style={{
+                aspectRatio: '1', padding: 0, position: 'relative',
+                background: 'transparent',
+                opacity: isFuture ? 0.3 : 1,
+              }}
+            >
+              <div style={{
+                position: 'absolute', inset: 2,
+                border: `1px solid ${checked ? p.gold : p.gold + '33'}`,
+                background: checked ? p.gold : 'transparent',
+                boxShadow: checked ? `0 0 12px ${p.gold}55, inset 0 0 0 1px ${p.bg}` : 'none',
+              }}>
+                {checked && (
+                  <div style={{
+                    position: 'absolute', inset: 2,
+                    background: `linear-gradient(135deg, ${p.goldGlow} 0%, ${p.gold} 100%)`,
+                  }}>
+                    <svg width="100%" height="100%" viewBox="0 0 20 20" style={{ display: 'block' }}>
+                      <rect x="6" y="6" width="8" height="8" fill="none" stroke={p.bg} strokeWidth="0.5" opacity="0.5"/>
+                      <line x1="10" y1="2" x2="10" y2="18" stroke={p.bg} strokeWidth="0.4" opacity="0.4"/>
+                      <line x1="2" y1="10" x2="18" y2="10" stroke={p.bg} strokeWidth="0.4" opacity="0.4"/>
+                    </svg>
+                  </div>
+                )}
+              </div>
+              {today && (
+                <div style={{
+                  position: 'absolute', inset: -2, border: `1px solid ${p.accent}`,
+                  pointerEvents: 'none',
+                }}/>
+              )}
+              <div style={{
+                position: 'absolute', inset: 0, display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'JetBrains Mono', fontSize: 11,
+                color: checked ? p.bg : (today ? p.accent : p.pearl),
+                fontWeight: checked ? 600 : 400,
+              }}>
+                {d.getDate()}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{
+        margin: '24px 24px 0', padding: '16px 18px',
+        background: p.bgRaised, position: 'relative',
+      }}>
+        {[{top:-3,left:-3},{top:-3,right:-3},{bottom:-3,left:-3},{bottom:-3,right:-3}].map((pos,i) => (
+          <div key={i} style={{ position:'absolute', width:6, height:6, background:p.gold, ...pos }}/>
+        ))}
+        <div style={{
+          fontFamily: 'Inter', fontSize: 10, letterSpacing: 2, color: p.goldDim,
+          textTransform: 'uppercase', marginBottom: 8,
+        }}>{groupLabel} · This month</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <Stat palette={p} label="Kept" value={`${completed}/${totalSoFar}`}/>
+          <Stat palette={p} label="Rate" value={`${pct}%`}/>
+          <Stat palette={p} label="Longest" value={longestStreak.toString()}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ palette, label, value }) {
+  const p = palette;
+  return (
+    <div>
+      <div style={{
+        fontFamily: '"Cormorant Garamond", serif', fontSize: 28,
+        color: p.gold, fontWeight: 500, lineHeight: 1,
+      }}>{value}</div>
+      <div style={{
+        fontFamily: 'Inter', fontSize: 9, color: p.pearlDim, letterSpacing: 1.5,
+        textTransform: 'uppercase', marginTop: 4,
+      }}>{label}</div>
+    </div>
+  );
+}
+
+Object.assign(window, { DayView, WeekView, MonthView, ViewHeader, navBtn, Stat });
+</script>
+
+<!-- ============================================================ -->
+<!-- detail-onboarding.jsx — Detail, Edit sheet, Onboarding, Widget -->
+<!-- ============================================================ -->
+<script type="text/babel">
+const { useState: useStateD } = React;
+
+function HabitDetail({ palette, checkboxStyle, habit, onBack, toggleLog, onEdit }) {
+  const p = palette;
+  const days = Array.from({ length: 90 }, (_, i) => addDays(TODAY, -(89 - i)));
+
+  const longestStreak = (() => {
+    let best = 0, cur = 0;
+    for (let i = 0; i < 90; i++) {
+      if (habit.logs.has(dateKey(addDays(TODAY, -i)))) { cur++; best = Math.max(best, cur); }
+      else cur = 0;
+    }
+    return best;
+  })();
+  const totalLogs = days.filter(d => isLogged(habit, d)).length;
+
+  return (
+    <div style={{ minHeight: '100%', paddingBottom: 60 }}>
+      <ViewHeader
+        palette={p}
+        onBack={onBack}
+        title={habit.name}
+        subtitle={`${habit.category} · ${habit.frequency}`}
+        right={
+          <button onClick={onEdit} style={{
+            background: 'transparent', border: `1px solid ${p.gold}55`, padding: '6px 12px',
+            color: p.gold, fontFamily: 'Inter', fontSize: 11, letterSpacing: 1.5,
+            textTransform: 'uppercase', cursor: 'pointer',
+          }}>Edit</button>
+        }
+      />
+
+      <div style={{ padding: '14px 24px 0' }}>
+        <div style={{ padding: '20px 18px', background: p.bgRaised, position: 'relative' }}>
+          {[{top:-3,left:-3},{top:-3,right:-3},{bottom:-3,left:-3},{bottom:-3,right:-3}].map((pos,i) => (
+            <div key={i} style={{ position:'absolute', width:6, height:6, background:p.gold, ...pos }}/>
+          ))}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontFamily: 'Inter', fontSize: 10, letterSpacing: 2, color: p.goldDim, textTransform: 'uppercase' }}>
+                Current streak
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
+                <div style={{
+                  fontFamily: '"Cormorant Garamond", serif', fontSize: 56,
+                  color: habit.frozen ? p.frost : p.gold, fontWeight: 400, lineHeight: 1,
+                }}>{habit.streak}</div>
+                <div style={{ fontFamily: 'Inter', fontSize: 13, color: p.pearlDim, letterSpacing: 1 }}>days</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, marginTop: 4 }}>
+              {habit.frozen
+                ? <FrostGlyph size={42} color={p.frost}/>
+                : <FlameGlyph size={42} color={p.flame}/>}
+              <div style={{ fontFamily: 'Inter', fontSize: 9, letterSpacing: 1.5, color: habit.frozen ? p.frost : p.flame, textTransform: 'uppercase' }}>
+                {habit.frozen ? "Frozen" : "Active"}
+              </div>
+            </div>
+          </div>
+          <div style={{ height: 1, background: `${p.gold}22`, margin: '16px 0' }}/>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Stat palette={p} label="Longest (90d)" value={longestStreak.toString()}/>
+            <Stat palette={p} label="Kept (90d)" value={totalLogs.toString()}/>
+            <Stat palette={p} label="Rate" value={`${Math.round(totalLogs/90*100)}%`}/>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding: '24px 24px 0' }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 10, letterSpacing: 2, color: p.goldDim, textTransform: 'uppercase', marginBottom: 10 }}>
+          Last 90 days
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(15, 1fr)', gap: 3 }}>
+          {days.map((d, i) => {
+            const checked = isLogged(habit, d);
+            const today = dateKey(d) === dateKey(TODAY);
+            return (
+              <button
+                key={i}
+                onClick={() => toggleLog(habit.id, d)}
+                title={dateKey(d)}
+                style={{
+                  aspectRatio: '1', padding: 0, position: 'relative',
+                  background: checked ? p.gold : 'transparent',
+                  border: `1px solid ${checked ? p.gold : p.gold + '22'}`,
+                  cursor: 'pointer',
+                  boxShadow: today ? `0 0 0 1px ${p.accent}` : 'none',
+                }}
+              >
+                {checked && (
+                  <div style={{
+                    position: 'absolute', inset: 1,
+                    background: `linear-gradient(135deg, ${p.goldGlow}, ${p.gold})`,
+                  }}/>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <OrnateDivider color={p.gold} style={{ padding: '0 24px', margin: '28px 0 18px' }}/>
+
+      <div style={{ padding: '0 24px' }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 10, letterSpacing: 2, color: p.goldDim, textTransform: 'uppercase', marginBottom: 12 }}>
+          The contract
+        </div>
+        <DetailRow palette={p} label="Why" value={habit.why}/>
+        <DetailRow palette={p} label="When" value={habit.when}/>
+        <DetailRow palette={p} label="Where" value={habit.where}/>
+        <DetailRow palette={p} label="Trigger" value={habit.trigger}/>
+        <DetailRow palette={p} label="Duration" value={habit.duration}/>
+        <DetailRow palette={p} label="Started" value="2026.01.15" last/>
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ palette, label, value, last }) {
+  const p = palette;
+  return (
+    <div style={{
+      padding: '14px 0', borderBottom: last ? 'none' : `1px solid ${p.gold}1A`,
+      display: 'flex', gap: 16,
+    }}>
+      <div style={{
+        width: 80, flexShrink: 0,
+        fontFamily: 'Inter', fontSize: 10, letterSpacing: 1.5, color: p.goldDim,
+        textTransform: 'uppercase', paddingTop: 2,
+      }}>{label}</div>
+      <div style={{
+        flex: 1, fontFamily: '"Cormorant Garamond", serif', fontSize: 17,
+        color: p.pearl, lineHeight: 1.4, fontWeight: 400,
+      }}>{value}</div>
+    </div>
+  );
+}
+
+function EditSheet({ palette, habit, onClose, onSave, onDelete, isNew,
+                    categories = [], onAddCategory, onRenameCategory, onDeleteCategory }) {
+  const [confirmDelete, setConfirmDelete] = useStateD(false);
+  const [editingCats, setEditingCats] = useStateD(false);
+  const [newCatName, setNewCatName] = useStateD("");
+  const [renamingCat, setRenamingCat] = useStateD(null); // name of category being renamed
+  const [renameValue, setRenameValue] = useStateD("");
+  const p = palette;
+  const [name, setName] = useStateD(habit?.name || "");
+  const [why, setWhy] = useStateD(habit?.why || "");
+  const [when, setWhen] = useStateD(habit?.when || "");
+  const [category, setCategory] = useStateD(habit?.category || categories[0] || "Mindfulness");
+  const [frequency, setFrequency] = useStateD(habit?.frequency || "Daily");
+  const [blockApps, setBlockApps] = useStateD(habit?.blockApps || []);
+
+  const frequencies = ["Daily", "Weekdays", "3× per week", "Weekly"];
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 100,
+      background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-end',
+    }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: '100%', background: p.bg, padding: '20px 24px 40px',
+        borderTop: `1px solid ${p.gold}55`, position: 'relative',
+        maxHeight: '85%', overflowY: 'auto',
+      }}>
+        <div style={{
+          width: 40, height: 3, background: p.gold, opacity: 0.5,
+          margin: '0 auto 16px',
+        }}/>
+
+        <div style={{
+          fontFamily: 'Inter', fontSize: 10, letterSpacing: 2.5, color: p.goldDim,
+          textTransform: 'uppercase', textAlign: 'center', marginBottom: 4,
+        }}>{isNew ? "New Habit" : "Edit Habit"}</div>
+        <div style={{
+          fontFamily: '"Cormorant Garamond", serif', fontSize: 28, color: p.pearl,
+          textAlign: 'center', marginBottom: 4, fontWeight: 400,
+        }}>The Contract</div>
+        <OrnateDivider color={p.gold} style={{ marginBottom: 24 }}/>
+
+        <Field palette={p} label="Name">
+          <input value={name} onChange={(e) => setName(e.target.value)}
+            placeholder="What will you do?" style={inputStyle(p)}/>
+        </Field>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{
+            fontFamily: 'Inter', fontSize: 9, letterSpacing: 2, color: p.goldDim,
+            textTransform: 'uppercase', marginBottom: 8, fontWeight: 600,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+          }}>
+            <span>Category</span>
+            <button onClick={() => setEditingCats(v => !v)} style={{
+              background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+              color: p.gold, fontFamily: 'Inter', fontSize: 9, letterSpacing: 1.5,
+              textTransform: 'uppercase', fontWeight: 600,
+            }}>{editingCats ? "Done" : "Manage"}</button>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {categories.map(c => {
+              const sel = c === category;
+              const chipStyle = {
+                padding: '6px 10px', fontFamily: 'Inter', fontSize: 11,
+                letterSpacing: 1, textTransform: 'uppercase',
+                background: sel ? `${p.gold}15` : 'transparent',
+                border: `1px solid ${sel ? p.gold : p.gold + '33'}`,
+                color: sel ? p.gold : p.pearlDim,
+                display: 'flex', alignItems: 'center', gap: 8,
+              };
+              if (editingCats) {
+                if (renamingCat === c) {
+                  return (
+                    <form key={c} onSubmit={(e) => {
+                      e.preventDefault();
+                      const next = renameValue.trim();
+                      if (next && next !== c) {
+                        onRenameCategory?.(c, next);
+                        if (category === c) setCategory(next);
+                      }
+                      setRenamingCat(null);
+                      setRenameValue("");
+                    }} style={{ ...chipStyle, padding: '2px 6px' }}>
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={() => { setRenamingCat(null); setRenameValue(""); }}
+                        style={{
+                          background: 'transparent', border: 'none', outline: 'none',
+                          color: p.pearl, fontFamily: 'Inter', fontSize: 11,
+                          letterSpacing: 1, textTransform: 'uppercase', width: 100, padding: '4px 4px',
+                        }}
+                      />
+                    </form>
+                  );
+                }
+                return (
+                  <div key={c} style={chipStyle}>
+                    <span onClick={() => { setRenamingCat(c); setRenameValue(c); }}
+                      style={{ cursor: 'pointer' }}>{c}</span>
+                    <button onClick={() => {
+                      if (categories.length <= 1) return;
+                      if (category === c) {
+                        setCategory(categories.find(x => x !== c) || "");
+                      }
+                      onDeleteCategory?.(c);
+                    }} style={{
+                      background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+                      color: p.flame, fontSize: 14, lineHeight: 1, opacity: categories.length <= 1 ? 0.3 : 1,
+                    }} title="Delete category">×</button>
+                  </div>
+                );
+              }
+              return (
+                <button key={c} onClick={() => setCategory(c)} style={{ ...chipStyle, cursor: 'pointer' }}>
+                  {c}
+                </button>
+              );
+            })}
+            {editingCats && (
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const n = newCatName.trim();
+                if (n) {
+                  onAddCategory?.(n);
+                  setCategory(n);
+                  setNewCatName("");
+                }
+              }} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <input
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  placeholder="+ New"
+                  style={{
+                    padding: '6px 10px', fontFamily: 'Inter', fontSize: 11,
+                    letterSpacing: 1, textTransform: 'uppercase',
+                    background: 'transparent',
+                    border: `1px dashed ${p.gold}66`,
+                    color: p.pearl, outline: 'none',
+                    width: 110,
+                  }}
+                />
+                {newCatName.trim() && (
+                  <button type="submit" style={{
+                    padding: '6px 10px', fontFamily: 'Inter', fontSize: 11,
+                    letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
+                    background: p.gold, border: 'none', color: p.bg, fontWeight: 600,
+                  }}>Add</button>
+                )}
+              </form>
+            )}
+          </div>
+        </div>
+
+        <Field palette={p} label="Frequency">
+          <div style={{ display: 'flex', gap: 6 }}>
+            {frequencies.map(f => {
+              const sel = f === frequency;
+              return (
+                <button key={f} onClick={() => setFrequency(f)} style={{
+                  flex: 1, padding: '8px 6px', fontFamily: 'Inter', fontSize: 11,
+                  letterSpacing: 0.5, cursor: 'pointer',
+                  background: sel ? `${p.gold}15` : 'transparent',
+                  border: `1px solid ${sel ? p.gold : p.gold + '33'}`,
+                  color: sel ? p.gold : p.pearlDim,
+                }}>{f}</button>
+              );
+            })}
+          </div>
+        </Field>
+
+        <Field palette={p} label="Why">
+          <textarea value={why} onChange={(e) => setWhy(e.target.value)}
+            placeholder="What's the deeper reason?" rows={2}
+            style={{ ...inputStyle(p), resize: 'none' }}/>
+        </Field>
+
+        <Field palette={p} label="When & where">
+          <input value={when} onChange={(e) => setWhen(e.target.value)}
+            placeholder="e.g. Morning, 7:00, kitchen" style={inputStyle(p)}/>
+        </Field>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{
+            fontFamily: 'Inter', fontSize: 9, letterSpacing: 2, color: p.goldDim,
+            textTransform: 'uppercase', marginBottom: 8, fontWeight: 600,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+          }}>
+            <span>Lock apps until kept</span>
+            <span style={{
+              fontFamily: 'JetBrains Mono', fontSize: 9, color: p.pearlDim,
+              letterSpacing: 0.5, textTransform: 'none',
+            }}>{blockApps.length} selected</span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {APP_OPTIONS.map(app => {
+              const sel = blockApps.includes(app);
+              return (
+                <button key={app} onClick={() => setBlockApps(prev =>
+                  prev.includes(app) ? prev.filter(a => a !== app) : [...prev, app]
+                )} style={{
+                  padding: '6px 10px', fontFamily: 'Inter', fontSize: 11,
+                  letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
+                  background: sel ? `${p.accent}22` : 'transparent',
+                  border: `1px solid ${sel ? p.accent : p.gold + '33'}`,
+                  color: sel ? p.accent : p.pearlDim,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  {sel && (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                      <rect x="5" y="11" width="14" height="10" rx="1" stroke={p.accent} strokeWidth="2"/>
+                      <path d="M8 11V7a4 4 0 018 0v4" stroke={p.accent} strokeWidth="2"/>
+                    </svg>
+                  )}
+                  {app}
+                </button>
+              );
+            })}
+          </div>
+          {blockApps.length > 0 && (
+            <div style={{
+              fontFamily: 'Inter', fontSize: 10, color: p.pearlDim,
+              marginTop: 8, lineHeight: 1.5, fontStyle: 'italic',
+            }}>These apps will stay locked until today's habit is kept.</div>
+          )}
+        </div>
+
+        {!isNew && (
+          <div style={{ marginTop: 28 }}>
+            <OrnateDivider color={p.gold}/>
+            {!confirmDelete ? (
+              <button onClick={() => setConfirmDelete(true)} style={{
+                width: '100%', marginTop: 18, padding: '12px 16px',
+                background: 'transparent',
+                border: `1px solid ${p.flame}55`,
+                color: p.flame,
+                fontFamily: 'Inter', fontSize: 11, letterSpacing: 2.5,
+                textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" stroke={p.flame} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Break the contract
+              </button>
+            ) : (
+              <div style={{
+                marginTop: 18, padding: 14, position: 'relative',
+                background: `${p.flame}10`, border: `1px solid ${p.flame}55`,
+              }}>
+                {[{top:-3,left:-3},{top:-3,right:-3},{bottom:-3,left:-3},{bottom:-3,right:-3}].map((pos,i) => (
+                  <div key={i} style={{ position:'absolute', width:6, height:6, background:p.flame, ...pos }}/>
+                ))}
+                <div style={{
+                  fontFamily: '"Cormorant Garamond", serif', fontSize: 17,
+                  color: p.pearl, textAlign: 'center', marginBottom: 4, fontWeight: 500,
+                }}>Delete this habit?</div>
+                <div style={{
+                  fontFamily: 'Inter', fontSize: 11, color: p.pearlDim,
+                  textAlign: 'center', marginBottom: 12, lineHeight: 1.5,
+                }}>All logs and streaks for this habit will be lost.</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setConfirmDelete(false)} style={{
+                    flex: 1, padding: '10px 12px', background: 'transparent',
+                    border: `1px solid ${p.pearlDim}55`, color: p.pearlDim,
+                    fontFamily: 'Inter', fontSize: 11, letterSpacing: 2,
+                    textTransform: 'uppercase', cursor: 'pointer',
+                  }}>Keep</button>
+                  <button onClick={() => { onDelete?.(habit?.id); }} style={{
+                    flex: 1, padding: '10px 12px', background: p.flame,
+                    border: `1px solid ${p.flame}`, color: p.bg,
+                    fontFamily: 'Inter', fontSize: 11, letterSpacing: 2,
+                    textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600,
+                  }}>Delete</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: '14px 16px', background: 'transparent',
+            border: `1px solid ${p.pearlDim}55`, color: p.pearlDim,
+            fontFamily: 'Inter', fontSize: 12, letterSpacing: 2,
+            textTransform: 'uppercase', cursor: 'pointer',
+          }}>Cancel</button>
+          <button onClick={() => { onSave?.({ name, why, when, category, frequency, blockApps }); onClose(); }} style={{
+            flex: 2, padding: '14px 16px', background: p.gold,
+            border: `1px solid ${p.gold}`, color: p.bg,
+            fontFamily: 'Inter', fontSize: 12, letterSpacing: 2,
+            textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600,
+          }}>{isNew ? "Inscribe" : "Save"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ palette, label, children }) {
+  const p = palette;
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{
+        fontFamily: 'Inter', fontSize: 9, letterSpacing: 2, color: p.goldDim,
+        textTransform: 'uppercase', marginBottom: 8, fontWeight: 600,
+      }}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
+function inputStyle(p) {
+  return {
+    width: '100%', padding: '10px 12px', boxSizing: 'border-box',
+    background: p.bgRaised, border: `1px solid ${p.gold}33`,
+    color: p.pearl, fontFamily: '"Cormorant Garamond", serif', fontSize: 17,
+    outline: 'none',
+  };
+}
+
+function Onboarding({ palette, onDone }) {
+  const p = palette;
+  const [page, setPage] = useStateD(0);
+
+  const pages = [
+    {
+      eyebrow: "Welcome",
+      title: "A quiet ledger\nfor a steady life",
+      body: "Habits, not goals. Mark each day kept. Watch the line grow without striving for it.",
+      art: "ornament",
+    },
+    {
+      eyebrow: "How it works",
+      title: "Three windows\non the same garden",
+      body: "Today's keep · the week's pattern · the month's whole. Tap any day, past or present. Two days off keep your streak warm.",
+      art: "windows",
+    },
+    {
+      eyebrow: "Begin",
+      title: "Inscribe\nyour first habit",
+      body: "Name it. Tie it to a time and a place. The contract makes the keeping easier.",
+      art: "quill",
+    },
+  ];
+
+  const cur = pages[page];
+
+  return (
+    <div style={{
+      minHeight: '100%', display: 'flex', flexDirection: 'column',
+      padding: '60px 32px 40px', position: 'relative',
+    }}>
+      <button onClick={onDone} style={{
+        position: 'absolute', top: 60, right: 24,
+        background: 'transparent', border: 'none', color: p.pearlDim,
+        fontFamily: 'Inter', fontSize: 11, letterSpacing: 2, textTransform: 'uppercase',
+        cursor: 'pointer',
+      }}>Skip</button>
+
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 240 }}>
+        <OnboardingArt kind={cur.art} palette={p}/>
+      </div>
+
+      <OrnateDivider color={p.gold}/>
+
+      <div style={{
+        fontFamily: 'Inter', fontSize: 10, letterSpacing: 3, color: p.goldDim,
+        textTransform: 'uppercase', marginTop: 24, textAlign: 'center', fontWeight: 600,
+      }}>{cur.eyebrow}</div>
+
+      <div style={{
+        fontFamily: '"Cormorant Garamond", serif', fontSize: 38, color: p.pearl,
+        textAlign: 'center', marginTop: 8, lineHeight: 1.05, fontWeight: 400,
+        whiteSpace: 'pre-line', letterSpacing: -0.5,
+      }}>{cur.title}</div>
+
+      <div style={{
+        fontFamily: 'Inter', fontSize: 14, color: p.pearlDim,
+        textAlign: 'center', marginTop: 14, lineHeight: 1.55,
+        textWrap: 'pretty',
+      }}>{cur.body}</div>
+
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 28 }}>
+        {pages.map((_, i) => (
+          <div key={i} style={{
+            width: i === page ? 24 : 6, height: 2,
+            background: i === page ? p.gold : p.gold + '44',
+            transition: 'all 0.3s',
+          }}/>
+        ))}
+      </div>
+
+      <button onClick={() => page < pages.length - 1 ? setPage(page + 1) : onDone()}
+        style={{
+          marginTop: 24, padding: '14px 16px', background: p.gold,
+          border: `1px solid ${p.gold}`, color: p.bg,
+          fontFamily: 'Inter', fontSize: 12, letterSpacing: 2.5,
+          textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600,
+        }}
+      >{page < pages.length - 1 ? "Continue" : "Begin"}</button>
+    </div>
+  );
+}
+
+function OnboardingArt({ kind, palette }) {
+  const p = palette;
+  if (kind === "ornament") {
+    return (
+      <svg width="200" height="200" viewBox="0 0 200 200">
+        <defs>
+          <radialGradient id="oarad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={p.goldGlow} stopOpacity="0.3"/>
+            <stop offset="100%" stopColor={p.gold} stopOpacity="0"/>
+          </radialGradient>
+        </defs>
+        <circle cx="100" cy="100" r="90" fill="url(#oarad)"/>
+        <rect x="40" y="40" width="120" height="120" stroke={p.gold} strokeWidth="1" fill="none"/>
+        <rect x="55" y="55" width="90" height="90" stroke={p.gold} strokeWidth="0.5" fill="none" opacity="0.6"/>
+        <rect x="80" y="80" width="40" height="40" fill={p.gold}/>
+        <rect x="88" y="88" width="24" height="24" fill={p.bg}/>
+        <rect x="96" y="96" width="8" height="8" fill={p.gold}/>
+        {[[40,40],[160,40],[40,160],[160,160]].map(([x,y],i) => (
+          <rect key={i} x={x-4} y={y-4} width="8" height="8" fill={p.gold}/>
+        ))}
+        {[0,45,90,135,180,225,270,315].map(a => (
+          <line key={a}
+            x1="100" y1="100"
+            x2={100 + Math.cos(a*Math.PI/180) * 70}
+            y2={100 + Math.sin(a*Math.PI/180) * 70}
+            stroke={p.gold} strokeWidth="0.4" opacity="0.3"/>
+        ))}
+      </svg>
+    );
+  }
+  if (kind === "windows") {
+    return (
+      <svg width="220" height="180" viewBox="0 0 220 180">
+        {[0,1,2].map(i => (
+          <g key={i} transform={`translate(${i*70}, ${i*8})`}>
+            <rect x="10" y="10" width="60" height="120" stroke={p.gold} strokeWidth="1" fill={p.bgRaised}/>
+            <rect x="14" y="14" width="52" height="112" stroke={p.gold} strokeWidth="0.5" fill="none" opacity="0.5"/>
+            <line x1="40" y1="14" x2="40" y2="126" stroke={p.gold} strokeWidth="0.4" opacity="0.4"/>
+            <line x1="14" y1="70" x2="66" y2="70" stroke={p.gold} strokeWidth="0.4" opacity="0.4"/>
+            {[0,1,2,3].map(r => [0,1].map(c => {
+              const filled = (i + r + c) % 2 === 0;
+              return <rect key={`${r}-${c}`} x={16 + c*25} y={16 + r*27} width="22" height="24" fill={filled ? p.gold : 'none'} opacity={filled ? 0.7 : 1}/>;
+            }))}
+            <rect x="6" y="6" width="6" height="6" fill={p.gold}/>
+            <rect x="68" y="6" width="6" height="6" fill={p.gold}/>
+            <rect x="6" y="128" width="6" height="6" fill={p.gold}/>
+            <rect x="68" y="128" width="6" height="6" fill={p.gold}/>
+          </g>
+        ))}
+      </svg>
+    );
+  }
+  if (kind === "quill") {
+    return (
+      <svg width="200" height="200" viewBox="0 0 200 200">
+        <rect x="30" y="30" width="140" height="140" stroke={p.gold} strokeWidth="1" fill={p.bgRaised} opacity="0.5"/>
+        <rect x="40" y="40" width="120" height="120" stroke={p.gold} strokeWidth="0.5" fill="none" opacity="0.5"/>
+        {[60, 75, 90, 105, 120, 135].map((y, i) => (
+          <line key={i} x1="50" y1={y} x2={i < 5 ? 130 + i*5 : 95} y2={y} stroke={p.gold} strokeWidth="0.6" opacity="0.4"/>
+        ))}
+        <path d="M140 120L160 100M160 100L155 95L140 110L145 115M160 100L165 105"
+          stroke={p.gold} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+        <line x1="158" y1="98" x2="155" y2="95" stroke={p.gold} strokeWidth="1.5"/>
+        {[[30,30],[170,30],[30,170],[170,170]].map(([x,y],i) => (
+          <rect key={i} x={x-3} y={y-3} width="6" height="6" fill={p.gold}/>
+        ))}
+      </svg>
+    );
+  }
+  return null;
+}
+
+function HabitWidget({ palette, habits }) {
+  const p = palette;
+  const completed = habits.filter(h => isLogged(h, TODAY)).length;
+  return (
+    <div style={{
+      width: 158, height: 158, background: p.bg,
+      border: `1px solid ${p.gold}33`, padding: 14,
+      position: 'relative', boxSizing: 'border-box',
+      borderRadius: 22,
+    }}>
+      {[{top:6,left:6},{top:6,right:6},{bottom:6,left:6},{bottom:6,right:6}].map((pos,i) => (
+        <div key={i} style={{ position:'absolute', width:3, height:3, background:p.gold, ...pos }}/>
+      ))}
+      <div style={{
+        fontFamily: 'Inter', fontSize: 8, letterSpacing: 1.5, color: p.goldDim,
+        textTransform: 'uppercase', fontWeight: 600,
+      }}>Today · 27 Apr</div>
+      <div style={{
+        fontFamily: '"Cormorant Garamond", serif', fontSize: 32,
+        color: p.gold, fontWeight: 400, lineHeight: 1, marginTop: 4,
+      }}>{completed}<span style={{ color: p.pearlDim, fontSize: 18 }}>/{habits.length}</span></div>
+      <div style={{
+        fontFamily: 'Inter', fontSize: 9, color: p.pearlDim, letterSpacing: 1,
+        textTransform: 'uppercase', marginTop: 2,
+      }}>Kept</div>
+      <div style={{
+        position: 'absolute', bottom: 14, left: 14, right: 14,
+        display: 'grid', gridTemplateColumns: `repeat(${habits.length}, 1fr)`, gap: 4,
+      }}>
+        {habits.map(h => {
+          const checked = isLogged(h, TODAY);
+          return (
+            <div key={h.id} style={{
+              aspectRatio: '1', border: `1px solid ${p.gold}55`,
+              background: checked ? p.gold : 'transparent',
+              boxShadow: checked ? `0 0 4px ${p.gold}88` : 'none',
+            }}/>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Celebration({ palette, onDone }) {
+  const p = palette;
+  React.useEffect(() => {
+    const t = setTimeout(onDone, 3200);
+    return () => clearTimeout(t);
+  }, []);
+
+  const bursts = [
+    { x: 50, y: 28, delay: 0,    size: 120 },
+    { x: 22, y: 55, delay: 0.22, size: 84 },
+    { x: 78, y: 60, delay: 0.42, size: 92 },
+    { x: 35, y: 80, delay: 0.65, size: 72 },
+    { x: 70, y: 22, delay: 0.85, size: 66 },
+    { x: 50, y: 70, delay: 1.05, size: 100 },
+    { x: 18, y: 28, delay: 1.25, size: 60 },
+    { x: 82, y: 82, delay: 1.45, size: 70 },
+  ];
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 300,
+      pointerEvents: 'none', overflow: 'hidden',
+      background: `radial-gradient(ellipse at center, ${p.gold}1A 0%, transparent 65%)`,
+    }}>
+      <style>{`
+        @keyframes nouveau-bloom {
+          0%   { transform: translate(-50%, -50%) scale(0)   rotate(0deg); opacity: 0; }
+          12%  { opacity: 1; }
+          100% { transform: translate(-50%, -50%) scale(1.9) rotate(45deg); opacity: 0; }
+        }
+        @keyframes nouveau-rays {
+          0%   { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+          12%  { opacity: 1; }
+          100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+        }
+        @keyframes nouveau-title {
+          0%, 8% { opacity: 0; transform: translate(-50%, -50%) scale(0.86); }
+          22%    { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+          82%    { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+          100%   { opacity: 0; transform: translate(-50%, -50%) scale(1.05); }
+        }
+      `}</style>
+
+      {bursts.map((b, i) => (
+        <React.Fragment key={i}>
+          <div style={{
+            position: 'absolute', left: `${b.x}%`, top: `${b.y}%`,
+            width: b.size, height: b.size,
+            animation: `nouveau-rays 1.7s cubic-bezier(0.2,0.7,0.3,1) ${b.delay}s both`,
+          }}>
+            <svg width="100%" height="100%" viewBox="-50 -50 100 100" style={{ display: 'block' }}>
+              {[0,30,60,90,120,150,180,210,240,270,300,330].map(a => (
+                <line key={a}
+                  x1={Math.cos(a*Math.PI/180)*8} y1={Math.sin(a*Math.PI/180)*8}
+                  x2={Math.cos(a*Math.PI/180)*46} y2={Math.sin(a*Math.PI/180)*46}
+                  stroke={p.gold} strokeWidth="0.7" opacity="0.75"/>
+              ))}
+              <circle cx="0" cy="0" r="44" fill="none" stroke={p.goldGlow} strokeWidth="0.4" opacity="0.5"/>
+            </svg>
+          </div>
+          <div style={{
+            position: 'absolute', left: `${b.x}%`, top: `${b.y}%`,
+            width: b.size * 0.62, height: b.size * 0.62,
+            animation: `nouveau-bloom 2.1s cubic-bezier(0.2,0.7,0.3,1) ${b.delay + 0.1}s both`,
+          }}>
+            <svg width="100%" height="100%" viewBox="-30 -30 60 60" style={{ display: 'block' }}>
+              <rect x="-22" y="-22" width="44" height="44" stroke={p.goldGlow} strokeWidth="1" fill="none"/>
+              <rect x="-13" y="-13" width="26" height="26" stroke={p.gold} strokeWidth="0.7" fill="none"/>
+              <rect x="-6" y="-6" width="12" height="12" fill={p.goldGlow}/>
+              <rect x="-2" y="-2" width="4" height="4" fill={p.bg}/>
+              {[[-22,-22],[22,-22],[-22,22],[22,22]].map(([x,y],j) => (
+                <rect key={j} x={x-2.5} y={y-2.5} width="5" height="5" fill={p.gold}/>
+              ))}
+              <line x1="-22" y1="0" x2="22" y2="0" stroke={p.gold} strokeWidth="0.4" opacity="0.55"/>
+              <line x1="0" y1="-22" x2="0" y2="22" stroke={p.gold} strokeWidth="0.4" opacity="0.55"/>
+              <line x1="-22" y1="-22" x2="22" y2="22" stroke={p.accent} strokeWidth="0.3" opacity="0.4"/>
+              <line x1="-22" y1="22" x2="22" y2="-22" stroke={p.accent} strokeWidth="0.3" opacity="0.4"/>
+            </svg>
+          </div>
+        </React.Fragment>
+      ))}
+
+      <div style={{
+        position: 'absolute', top: '50%', left: '50%',
+        textAlign: 'center', whiteSpace: 'nowrap',
+        animation: 'nouveau-title 3.2s ease-out both',
+      }}>
+        <div style={{
+          fontFamily: 'Inter', fontSize: 10, letterSpacing: 4,
+          color: p.goldDim, textTransform: 'uppercase', fontWeight: 600,
+          marginBottom: 14,
+        }}>The day is kept</div>
+        <div style={{
+          fontFamily: '"Cormorant Garamond", serif', fontSize: 52,
+          color: p.pearl, fontWeight: 400, letterSpacing: -0.5,
+          lineHeight: 1,
+        }}>All complete</div>
+        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', gap: 6 }}>
+          <div style={{ width: 4, height: 4, background: p.gold }}/>
+          <div style={{ width: 28, height: 1, background: p.gold, marginTop: 1.5 }}/>
+          <div style={{ width: 4, height: 4, background: p.gold }}/>
+          <div style={{ width: 28, height: 1, background: p.gold, marginTop: 1.5 }}/>
+          <div style={{ width: 4, height: 4, background: p.gold }}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { HabitDetail, EditSheet, Onboarding, HabitWidget, Celebration });
+</script>
+
+<!-- ============================================================ -->
+<!-- app.jsx                                                       -->
+<!-- ============================================================ -->
+<script type="text/babel">
+const { useState: useStateA, useEffect: useEffectA } = React;
+
+const TWEAK_DEFAULTS = {
+  "palette": "midnight",
+  "checkboxStyle": "rosette"
+};
+
+function HabitApp({ tweaks }) {
+  const palette = PALETTES[tweaks.palette] || PALETTES.midnight;
+
+  const [tab, setTab] = useStateA("day");
+  const [route, setRoute] = useStateA({ name: "main" });
+  const [showOnboarding, setShowOnboarding] = useStateA(true);
+  const [currentDate, setCurrentDate] = useStateA(new Date(TODAY));
+  const [showWidget, setShowWidget] = useStateA(false);
+
+  const [habits, setHabits] = useStateA(() => HABITS.map(h => ({ ...h, logs: new Set(h.logs) })));
+
+  const [categories, setCategories] = useStateA([
+    "Mindfulness", "Learning", "Fitness", "Health", "Creativity", "Productivity", "Social",
+  ]);
+
+  function addCategory(name) {
+    const n = name.trim();
+    if (!n || categories.includes(n)) return;
+    setCategories(prev => [...prev, n]);
+  }
+  function renameCategory(oldName, newName) {
+    const n = newName.trim();
+    if (!n || n === oldName || categories.includes(n)) return;
+    setCategories(prev => prev.map(c => c === oldName ? n : c));
+    setHabits(prev => prev.map(h => h.category === oldName ? { ...h, category: n } : h));
+  }
+  function deleteCategory(name) {
+    if (categories.length <= 1) return;
+    const fallback = categories.find(c => c !== name);
+    setCategories(prev => prev.filter(c => c !== name));
+    setHabits(prev => prev.map(h => h.category === name ? { ...h, category: fallback } : h));
+  }
+
+  function toggleLog(habitId, date) {
+    navigator.vibrate?.(15);
+    setHabits(prev => prev.map(h => {
+      if (h.id !== habitId) return h;
+      const logs = new Set(h.logs);
+      const k = dateKey(date);
+      if (logs.has(k)) logs.delete(k);
+      else logs.add(k);
+      return { ...h, logs };
+    }));
+  }
+
+  const allKeptToday = habits.length > 0 && habits.every(h => h.logs.has(dateKey(TODAY)));
+  const prevAllKeptRef = React.useRef(allKeptToday);
+  const [showCelebration, setShowCelebration] = useStateA(false);
+  React.useEffect(() => {
+    if (allKeptToday && !prevAllKeptRef.current) {
+      setShowCelebration(true);
+      navigator.vibrate?.([30, 70, 40, 70, 40, 70, 120]);
+    }
+    prevAllKeptRef.current = allKeptToday;
+  }, [allKeptToday]);
+
+  const habitsWithStreak = habits.map(h => {
+    let streak = 0, freeze = 0, frozen = false;
+    let cursor = new Date(TODAY);
+    for (let i = 0; i < 365; i++) {
+      if (h.logs.has(dateKey(cursor))) { streak++; freeze = 0; }
+      else { freeze++; if (freeze > 2) break; }
+      cursor = addDays(cursor, -1);
+    }
+    frozen = !h.logs.has(dateKey(TODAY)) && streak > 0;
+    return { ...h, streak, frozen };
+  });
+
+  if (showOnboarding) {
+    return (
+      <DeviceShell palette={palette}>
+        <Onboarding palette={palette} onDone={() => setShowOnboarding(false)}/>
+      </DeviceShell>
+    );
+  }
+
+  const currentHabit = route.habitId ? habitsWithStreak.find(h => h.id === route.habitId) : null;
+
+  return (
+    <DeviceShell palette={palette}>
+      <div style={{
+        position: 'relative', width: '100%', height: '100%',
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{ flex: 1, overflow: 'auto', paddingTop: 50 }}>
+          {route.name === "main" && tab === "day" && (
+            <DayView palette={palette} checkboxStyle={tweaks.checkboxStyle}
+              habits={habitsWithStreak} toggleLog={toggleLog}
+              categories={categories}
+              currentDate={currentDate} setCurrentDate={setCurrentDate}
+              onOpenHabit={(h) => setRoute({ name: "detail", habitId: h.id })}
+              onOpenDate={() => {}}
+            />
+          )}
+          {route.name === "main" && tab === "week" && (
+            <WeekView palette={palette} checkboxStyle={tweaks.checkboxStyle}
+              habits={habitsWithStreak} toggleLog={toggleLog}
+              currentDate={currentDate} setCurrentDate={setCurrentDate}
+              onOpenHabit={(h) => setRoute({ name: "detail", habitId: h.id })}
+            />
+          )}
+          {route.name === "main" && tab === "month" && (
+            <MonthView palette={palette} checkboxStyle={tweaks.checkboxStyle}
+              habits={habitsWithStreak} toggleLog={toggleLog}
+              categories={categories}
+              currentDate={currentDate} setCurrentDate={setCurrentDate}
+              onOpenHabit={(h) => setRoute({ name: "detail", habitId: h.id })}
+            />
+          )}
+          {route.name === "detail" && currentHabit && (
+            <HabitDetail palette={palette} checkboxStyle={tweaks.checkboxStyle}
+              habit={currentHabit}
+              onBack={() => setRoute({ name: "main" })}
+              toggleLog={toggleLog}
+              onEdit={() => setRoute({ name: "edit", habitId: currentHabit.id })}
+            />
+          )}
+        </div>
+
+        {route.name === "main" && (
+          <TabBar palette={palette} tab={tab} setTab={setTab} onAdd={() => setRoute({ name: "new" })}/>
+        )}
+
+        {route.name === "edit" && currentHabit && (
+          <EditSheet palette={palette} habit={currentHabit}
+            categories={categories}
+            onAddCategory={addCategory}
+            onRenameCategory={renameCategory}
+            onDeleteCategory={deleteCategory}
+            onClose={() => setRoute({ name: "detail", habitId: currentHabit.id })}
+            onSave={(values) => {
+              setHabits(prev => prev.map(h => h.id === currentHabit.id ? {
+                ...h,
+                name: values.name?.trim() || h.name,
+                category: values.category,
+                frequency: values.frequency,
+                when: values.when ?? h.when,
+                why: values.why ?? h.why,
+                blockApps: values.blockApps ?? h.blockApps ?? [],
+              } : h));
+            }}
+            onDelete={(id) => {
+              setHabits(prev => prev.filter(h => h.id !== id));
+              setRoute({ name: "main" });
+            }}
+            isNew={false}
+          />
+        )}
+        {route.name === "new" && (
+          <EditSheet palette={palette} habit={null}
+            categories={categories}
+            onAddCategory={addCategory}
+            onRenameCategory={renameCategory}
+            onDeleteCategory={deleteCategory}
+            onClose={() => setRoute({ name: "main" })}
+            onSave={(values) => {
+              if (!values.name?.trim()) return;
+              const categoryToGlyph = {
+                Mindfulness: 'meditation', Learning: 'reading', Fitness: 'sport',
+                Health: 'water', Creativity: 'writing', Productivity: 'creativity', Social: 'social',
+              };
+              setHabits(prev => [...prev, {
+                id: `habit-${Date.now()}`,
+                name: values.name.trim(),
+                category: values.category,
+                glyph: categoryToGlyph[values.category] || 'creativity',
+                frequency: values.frequency,
+                when: values.when || '',
+                where: '',
+                why: values.why || '',
+                duration: '',
+                trigger: '',
+                streak: 0,
+                frozen: false,
+                logs: new Set(),
+                blockApps: values.blockApps || [],
+              }]);
+              setTab("day");
+            }}
+            isNew={true}
+          />
+        )}
+
+        {showWidget && (
+          <div onClick={() => setShowWidget(false)} style={{
+            position: 'absolute', inset: 0, zIndex: 200,
+            background: 'radial-gradient(circle at 30% 30%, #2a2a3a 0%, #050505 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexDirection: 'column', gap: 24,
+          }}>
+            <div style={{ fontFamily: 'Inter', fontSize: 11, color: palette.pearlDim, letterSpacing: 2, textTransform: 'uppercase' }}>
+              Home Screen
+            </div>
+            <HabitWidget palette={palette} habits={habitsWithStreak}/>
+            <div style={{ fontFamily: 'Inter', fontSize: 11, color: palette.pearlDim }}>Tap to dismiss</div>
+          </div>
+        )}
+
+        {showCelebration && (
+          <Celebration palette={palette} onDone={() => setShowCelebration(false)}/>
+        )}
+      </div>
+
+      {route.name === "main" && (
+        <button onClick={() => setShowWidget(true)} style={{
+          position: 'absolute', top: 14, right: 14, zIndex: 70,
+          width: 28, height: 28, padding: 0,
+          background: 'transparent', border: `1px solid ${palette.gold}55`,
+          color: palette.gold, fontFamily: 'JetBrains Mono', fontSize: 9,
+          cursor: 'pointer', letterSpacing: 0.5,
+        }} title="Show home screen widget">◫</button>
+      )}
+    </DeviceShell>
+  );
+}
+
+function TabBar({ palette, tab, setTab, onAdd }) {
+  const p = palette;
+  const tabs = [
+    { id: "day", label: "Day" },
+    { id: "week", label: "Week" },
+    { id: "month", label: "Month" },
+  ];
+  return (
+    <div style={{
+      position: 'relative', padding: '14px 24px 32px',
+      background: `linear-gradient(to top, ${p.bg} 60%, ${p.bg}00)`,
+    }}>
+      <div style={{
+        position: 'absolute', top: 14, left: 24, right: 24,
+        height: 1, background: `linear-gradient(to right, transparent, ${p.gold}55, transparent)`,
+      }}/>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8 }}>
+        {tabs.map(t => {
+          const sel = t.id === tab;
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              flex: 1, padding: '10px 4px', position: 'relative',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+            }}>
+              <div style={{
+                fontFamily: '"Cormorant Garamond", serif', fontSize: 18,
+                color: sel ? p.gold : p.pearlDim, fontWeight: 400, letterSpacing: 0.3,
+              }}>{t.label}</div>
+              {sel && (
+                <div style={{
+                  position: 'absolute', bottom: 4, left: '50%',
+                  transform: 'translateX(-50%)',
+                  display: 'flex', gap: 3, alignItems: 'center',
+                }}>
+                  <div style={{ width: 3, height: 3, background: p.gold }}/>
+                  <div style={{ width: 12, height: 1, background: p.gold }}/>
+                  <div style={{ width: 3, height: 3, background: p.gold }}/>
+                </div>
+              )}
+            </button>
+          );
+        })}
+        <button onClick={onAdd} style={{
+          width: 44, height: 44, marginLeft: 8, padding: 0,
+          background: p.gold, border: 'none', cursor: 'pointer',
+          color: p.bg, fontFamily: 'serif', fontSize: 24, fontWeight: 300,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          position: 'relative',
+        }}>
+          {[{top:-2,left:-2},{top:-2,right:-2},{bottom:-2,left:-2},{bottom:-2,right:-2}].map((pos,i) => (
+            <div key={i} style={{ position:'absolute', width:4, height:4, background:p.gold, ...pos }}/>
+          ))}
+          <span style={{ lineHeight: 1, marginTop: -2 }}>+</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DeviceShell({ palette, children }) {
+  const p = palette;
+  return (
+    <div style={{
+      width: 402, height: 874, borderRadius: 48, overflow: 'hidden',
+      position: 'relative', background: p.bg,
+      boxShadow: `0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px ${p.gold}22, 0 0 80px ${p.gold}15`,
+      fontFamily: 'Inter, system-ui, sans-serif',
+      WebkitFontSmoothing: 'antialiased',
+      color: p.pearl,
+    }}>
+      <div style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        background: `
+          radial-gradient(ellipse at top, ${p.gold}08 0%, transparent 50%),
+          radial-gradient(ellipse at bottom, ${p.accent}05 0%, transparent 50%)
+        `,
+        zIndex: 1,
+      }}/>
+
+      <div style={{
+        position: 'absolute', top: 11, left: '50%', transform: 'translateX(-50%)',
+        width: 126, height: 37, borderRadius: 24, background: '#000', zIndex: 50,
+      }}/>
+
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}>
+        <IOSStatusBar dark={true} time="9:41"/>
+      </div>
+
+      <div style={{ position: 'relative', height: '100%', zIndex: 2 }}>
+        {children}
+      </div>
+
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 60,
+        height: 34, display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
+        paddingBottom: 8, pointerEvents: 'none',
+      }}>
+        <div style={{
+          width: 139, height: 5, borderRadius: 100,
+          background: `${p.gold}AA`,
+        }}/>
+      </div>
+    </div>
+  );
+}
+
+function HabitTweaks({ tweaks, setTweak }) {
+  return (
+    <TweaksPanel title="Tweaks">
+      <TweakSection title="Palette">
+        <TweakRadio
+          options={[
+            { value: "midnight", label: "Midnight" },
+            { value: "forest", label: "Forest" },
+            { value: "burgundy", label: "Burgundy" },
+            { value: "amethyst", label: "Amethyst" },
+          ]}
+          value={tweaks.palette}
+          onChange={(v) => setTweak('palette', v)}
+        />
+      </TweakSection>
+      <TweakSection title="Checkbox style">
+        <TweakRadio
+          options={[
+            { value: "rosette", label: "Rosette" },
+            { value: "stained", label: "Stained" },
+            { value: "engraved", label: "Engraved" },
+            { value: "candle", label: "Candle" },
+          ]}
+          value={tweaks.checkboxStyle}
+          onChange={(v) => setTweak('checkboxStyle', v)}
+        />
+      </TweakSection>
+    </TweaksPanel>
+  );
+}
+
+function App() {
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  return (
+    <div style={{
+      minHeight: '100vh', width: '100%',
+      background: 'radial-gradient(ellipse at center, #1a1721 0%, #0a0810 70%, #000 100%)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 40, boxSizing: 'border-box',
+      fontFamily: 'Inter, system-ui, sans-serif',
+    }}>
+      <HabitApp tweaks={tweaks}/>
+      <HabitTweaks tweaks={tweaks} setTweak={setTweak}/>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

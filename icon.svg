@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#13111C"/>
+      <stop offset="100%" stop-color="#0B0A12"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#E8C77A"/>
+      <stop offset="100%" stop-color="#C9A961"/>
+    </linearGradient>
+  </defs>
+  <rect width="180" height="180" rx="40" fill="url(#g)"/>
+  <g stroke="#C9A961" fill="none">
+    <rect x="36" y="36" width="108" height="108" stroke-width="2"/>
+    <rect x="50" y="50" width="80" height="80" stroke-width="1" opacity="0.6"/>
+  </g>
+  <g fill="#C9A961">
+    <rect x="32" y="32" width="8" height="8"/>
+    <rect x="140" y="32" width="8" height="8"/>
+    <rect x="32" y="140" width="8" height="8"/>
+    <rect x="140" y="140" width="8" height="8"/>
+  </g>
+  <rect x="72" y="72" width="36" height="36" fill="url(#gold)"/>
+  <g stroke="#0B0A12" stroke-width="1" opacity="0.5" fill="none">
+    <line x1="90" y1="72" x2="90" y2="108"/>
+    <line x1="72" y1="90" x2="108" y2="90"/>
+    <rect x="80" y="80" width="20" height="20"/>
+  </g>
+  <rect x="86" y="86" width="8" height="8" fill="#0B0A12" opacity="0.6"/>
+  <g stroke="#C9A961" stroke-width="0.7" opacity="0.4">
+    <line x1="90" y1="36" x2="90" y2="56"/>
+    <line x1="90" y1="124" x2="90" y2="144"/>
+    <line x1="36" y1="90" x2="56" y2="90"/>
+    <line x1="124" y1="90" x2="144" y2="90"/>
+  </g>
+</svg>
