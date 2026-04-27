@@ -896,7 +896,14 @@ function WeekView({ palette, checkboxStyle, habits, toggleLog, currentDate, setC
         eyebrow={`Week ${weekNum}`}
         title={`${weekStart.getDate()} ${monthNames[weekStart.getMonth()]} – ${addDays(weekStart, 6).getDate()} ${monthNames[addDays(weekStart, 6).getMonth()]}`}
         right={
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {startOfWeek(currentDate).getTime() !== startOfWeek(TODAY).getTime() && (
+              <button onClick={() => setCurrentDate(new Date(TODAY))} style={{
+                background: 'transparent', border: `1px solid ${p.gold}55`, padding: '4px 10px',
+                color: p.gold, fontFamily: 'Inter', fontSize: 10, letterSpacing: 1.5,
+                textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600,
+              }}>Today</button>
+            )}
             <button onClick={() => setCurrentDate(addDays(weekStart, -1))} style={navBtn(p)}>‹</button>
             <button onClick={() => setCurrentDate(addDays(weekStart, 7))} style={navBtn(p)}>›</button>
           </div>
@@ -1035,7 +1042,14 @@ function MonthView({ palette, checkboxStyle, habits, toggleLog, categories = [],
         eyebrow={`Year ${year}`}
         title={`${monthNames[month]}`}
         right={
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {(year !== TODAY.getFullYear() || month !== TODAY.getMonth()) && (
+              <button onClick={() => setCurrentDate(new Date(TODAY.getFullYear(), TODAY.getMonth(), 1))} style={{
+                background: 'transparent', border: `1px solid ${p.gold}55`, padding: '4px 10px',
+                color: p.gold, fontFamily: 'Inter', fontSize: 10, letterSpacing: 1.5,
+                textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600,
+              }}>Today</button>
+            )}
             <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} style={navBtn(p)}>‹</button>
             <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} style={navBtn(p)}>›</button>
           </div>
@@ -1925,7 +1939,7 @@ const TWEAK_DEFAULTS = {
   "checkboxStyle": "rosette"
 };
 
-function HabitApp({ tweaks }) {
+function HabitApp({ tweaks, setTweak }) {
   const palette = PALETTES[tweaks.palette] || PALETTES.midnight;
 
   const _persisted = loadPersisted();
@@ -1937,6 +1951,7 @@ function HabitApp({ tweaks }) {
   });
   const [currentDate, setCurrentDate] = useStateA(new Date(TODAY));
   const [showWidget, setShowWidget] = useStateA(false);
+  const [menuOpen, setMenuOpen] = useStateA(false);
 
   const [habits, setHabits] = useStateA(() =>
     _persisted ? _persisted.habits : HABITS.map(h => ({ ...h, logs: new Set(h.logs) }))
@@ -2029,7 +2044,22 @@ function HabitApp({ tweaks }) {
         paddingLeft: 'env(safe-area-inset-left)',
         paddingRight: 'env(safe-area-inset-right)',
       }}>
-        <div style={{ flex: 1, overflow: 'auto', paddingTop: 8 }}>
+        <div style={{
+          height: 36, padding: '0 18px',
+          display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+          flexShrink: 0,
+        }}>
+          <button onClick={() => setMenuOpen(true)} aria-label="Open menu" style={{
+            background: 'transparent', border: `1px solid ${palette.gold}33`,
+            padding: '6px 10px', cursor: 'pointer',
+            display: 'flex', flexDirection: 'column', gap: 3,
+          }}>
+            <span style={{ width: 16, height: 1, background: palette.gold }}/>
+            <span style={{ width: 16, height: 1, background: palette.gold }}/>
+            <span style={{ width: 16, height: 1, background: palette.gold }}/>
+          </button>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', paddingTop: 0 }}>
           {route.name === "main" && tab === "day" && (
             <DayView palette={palette} checkboxStyle={tweaks.checkboxStyle}
               habits={habitsWithStreak} toggleLog={toggleLog}
@@ -2147,9 +2177,91 @@ function HabitApp({ tweaks }) {
         {showCelebration && (
           <Celebration palette={palette} onDone={() => setShowCelebration(false)}/>
         )}
+
+        {menuOpen && (
+          <MenuSheet palette={palette} tweaks={tweaks} setTweak={setTweak}
+            onClose={() => setMenuOpen(false)}/>
+        )}
       </div>
 
     </DeviceShell>
+  );
+}
+
+function MenuSheet({ palette, tweaks, setTweak, onClose }) {
+  const p = palette;
+  const paletteOpts = [
+    { value: "midnight", label: "Midnight" },
+    { value: "forest",   label: "Forest" },
+    { value: "burgundy", label: "Burgundy" },
+    { value: "amethyst", label: "Amethyst" },
+  ];
+  const styleOpts = [
+    { value: "rosette",  label: "Rosette" },
+    { value: "stained",  label: "Stained" },
+    { value: "engraved", label: "Engraved" },
+    { value: "candle",   label: "Candle" },
+  ];
+  const chip = (sel) => ({
+    padding: '8px 12px', fontFamily: 'Inter', fontSize: 11,
+    letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
+    background: sel ? `${p.gold}15` : 'transparent',
+    border: `1px solid ${sel ? p.gold : p.gold + '33'}`,
+    color: sel ? p.gold : p.pearlDim, fontWeight: 500,
+    flex: 1, textAlign: 'center',
+  });
+  return (
+    <div onClick={onClose} style={{
+      position: 'absolute', inset: 0, zIndex: 100,
+      background: 'rgba(0,0,0,0.7)',
+      paddingTop: 'env(safe-area-inset-top)',
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: p.bg, padding: '20px 24px 28px',
+        borderBottom: `1px solid ${p.gold}55`, position: 'relative',
+      }}>
+        <div style={{
+          fontFamily: 'Inter', fontSize: 10, letterSpacing: 2.5, color: p.goldDim,
+          textTransform: 'uppercase', textAlign: 'center', marginBottom: 4,
+        }}>Menu</div>
+        <div style={{
+          fontFamily: '"Cormorant Garamond", serif', fontSize: 28, color: p.pearl,
+          textAlign: 'center', marginBottom: 4, fontWeight: 400,
+        }}>Settings</div>
+        <OrnateDivider color={p.gold} style={{ marginBottom: 22 }}/>
+
+        <div style={{
+          fontFamily: 'Inter', fontSize: 9, letterSpacing: 2, color: p.goldDim,
+          textTransform: 'uppercase', marginBottom: 8, fontWeight: 600,
+        }}>Palette</div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
+          {paletteOpts.map(o => (
+            <button key={o.value} onClick={() => setTweak('palette', o.value)} style={chip(tweaks.palette === o.value)}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{
+          fontFamily: 'Inter', fontSize: 9, letterSpacing: 2, color: p.goldDim,
+          textTransform: 'uppercase', marginBottom: 8, fontWeight: 600,
+        }}>Checkbox style</div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 22 }}>
+          {styleOpts.map(o => (
+            <button key={o.value} onClick={() => setTweak('checkboxStyle', o.value)} style={chip(tweaks.checkboxStyle === o.value)}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+
+        <button onClick={onClose} style={{
+          width: '100%', padding: '14px 16px', background: p.gold,
+          border: `1px solid ${p.gold}`, color: p.bg,
+          fontFamily: 'Inter', fontSize: 12, letterSpacing: 2,
+          textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600,
+        }}>Done</button>
+      </div>
+    </div>
   );
 }
 
@@ -2274,12 +2386,7 @@ function HabitTweaks({ tweaks, setTweak }) {
 
 function App() {
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  return (
-    <>
-      <HabitApp tweaks={tweaks}/>
-      <HabitTweaks tweaks={tweaks} setTweak={setTweak}/>
-    </>
-  );
+  return <HabitApp tweaks={tweaks} setTweak={setTweak}/>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
