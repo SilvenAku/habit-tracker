@@ -693,6 +693,31 @@ function focusStatsForDates(focusByDate, dates) {
   return { drifts, returns, distracted };
 }
 
+function trackedMsForDates(focusByDate, dates) {
+  let total = 0;
+  for (const d of dates) {
+    const e = focusByDate?.[dateKey(d)];
+    if (!e?.topicMs) continue;
+    for (const k in e.topicMs) total += e.topicMs[k] || 0;
+  }
+  return total;
+}
+
+// Mindfulness — geometric mean of focus quality and hours coverage.
+//   mindfulness = √( focusQ × hoursCoverage ) × 100
+// Each component is ∈ [0, 1]; geometric mean rewards balanced contribution.
+function mindfulnessScore({ focusStats, trackedMs, targetHours }) {
+  const r = focusStats?.returns || 0;
+  const x = focusStats?.distracted || 0;
+  const ms = trackedMs || 0;
+  const hasFocus = r + x > 0;
+  const hasTime = ms > 0;
+  if (!hasFocus && !hasTime) return null;
+  const focusQ = hasFocus ? r / (r + 2 * x) : 1;
+  const cov = targetHours > 0 ? Math.min(1, (ms / 3600000) / targetHours) : 1;
+  return Math.round(Math.sqrt(focusQ * cov) * 100);
+}
+
 const STORAGE_KEY = 'habit-tracker-v1';
 function loadPersisted() {
   try {
@@ -721,7 +746,7 @@ function savePersisted(habits, categories) {
 Object.assign(window, {
   TODAY, HABITS, dateKey, addDays, startOfWeek, isLogged,
   isCalorieHabit, caloriesForDate, netCaloriesForDates,
-  focusStatsForDates,
+  focusStatsForDates, trackedMsForDates, mindfulnessScore,
   loadPersisted, savePersisted,
 });
 </script>
@@ -790,28 +815,38 @@ function CalorieIndicator({ palette, label, net, goal, days = 1 }) {
   );
 }
 
-// Focus KPI — single 0–100 score from returns vs distracted
-//   score = returns / (returns + 2 * distracted) × 100
-// Distractions weighted 2× because giving in is worse than recovering.
 function focusScoreFor(stats) {
   const r = stats?.returns || 0;
   const x = stats?.distracted || 0;
   if (r + x === 0) return null;
   return Math.round((r / (r + 2 * x)) * 100);
 }
-function focusTier(palette, score) {
+function mindfulnessTier(palette, score) {
   const p = palette;
-  if (score == null) return { color: p.pearlDim, name: 'No focus sessions' };
+  if (score == null) return { color: p.pearlDim, name: 'No data yet' };
   if (score >= 85)   return { color: p.gold,    name: 'Excellent' };
   if (score >= 60)   return { color: p.gold,    name: 'Strong' };
   if (score >= 40)   return { color: p.pearl,   name: 'Mixed' };
-  return                     { color: p.flame,   name: 'Distracted' };
+  return                     { color: p.flame,   name: 'Low' };
 }
 
-function FocusStatsCard({ palette, label, stats }) {
+function fmtHoursMs(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  if (h > 0 && m > 0) return `${h}h ${String(m).padStart(2,'0')}m`;
+  if (h > 0)          return `${h}h`;
+  return `${m}m`;
+}
+
+function MindfulnessCard({ palette, label, focusStats, trackedMs, targetHours }) {
   const p = palette;
-  const score = focusScoreFor(stats);
-  const t = focusTier(p, score);
+  const score = mindfulnessScore({ focusStats, trackedMs, targetHours });
+  const t = mindfulnessTier(p, score);
+  const focusQ = focusScoreFor(focusStats);
+  const hoursStr = targetHours > 0
+    ? `${fmtHoursMs(trackedMs)} / ${targetHours}h`
+    : `${fmtHoursMs(trackedMs)}`;
   return (
     <div style={{ margin: '0 24px 16px', padding: '14px 16px', background: p.bgRaised, position: 'relative' }}>
       {[{top:-3,left:-3},{top:-3,right:-3},{bottom:-3,left:-3},{bottom:-3,right:-3}].map((pos,i) => (
@@ -838,9 +873,20 @@ function FocusStatsCard({ palette, label, stats }) {
           textTransform: 'uppercase', fontWeight: 600, textAlign: 'right',
         }}>{t.name}</div>
       </div>
+      {score != null && (
+        <div style={{
+          fontFamily: 'JetBrains Mono', fontSize: 10, color: p.pearlDim,
+          letterSpacing: 0.5, marginTop: 8,
+        }}>
+          Focus {focusQ == null ? '—' : focusQ} · {hoursStr}
+        </div>
+      )}
     </div>
   );
 }
+
+// Backwards-compat alias — old callsites still use this name.
+const FocusStatsCard = MindfulnessCard;
 
 function ViewHeader({ palette, eyebrow, title, subtitle, onBack, right }) {
   const p = palette;
@@ -877,7 +923,7 @@ function ViewHeader({ palette, eyebrow, title, subtitle, onBack, right }) {
   );
 }
 
-function DayView({ palette, checkboxStyle, habits, toggleLog, setCalorie, caloriesGoal = 0, focusByDate = {}, categories = [], currentDate, setCurrentDate, onOpenHabit, onOpenDate }) {
+function DayView({ palette, checkboxStyle, habits, toggleLog, setCalorie, caloriesGoal = 0, focusByDate = {}, focusHoursGoal = 0, categories = [], currentDate, setCurrentDate, onOpenHabit, onOpenDate }) {
   const p = palette;
   const isToday = dateKey(currentDate) === dateKey(TODAY);
   const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -945,8 +991,10 @@ function DayView({ palette, checkboxStyle, habits, toggleLog, setCalorie, calori
           goal={caloriesGoal} days={1}/>
       )}
 
-      <FocusStatsCard palette={p} label="Today's focus score"
-        stats={focusStatsForDates(focusByDate, [currentDate])}/>
+      <MindfulnessCard palette={p} label="Today's mindfulness"
+        focusStats={focusStatsForDates(focusByDate, [currentDate])}
+        trackedMs={trackedMsForDates(focusByDate, [currentDate])}
+        targetHours={focusHoursGoal}/>
 
       <OrnateDivider color={p.gold} style={{ padding: '0 24px', marginBottom: 16 }}/>
 
@@ -1073,7 +1121,7 @@ function navBtn(p) {
   };
 }
 
-function WeekView({ palette, checkboxStyle, habits, toggleLog, caloriesGoal = 0, focusByDate = {}, currentDate, setCurrentDate, onOpenHabit }) {
+function WeekView({ palette, checkboxStyle, habits, toggleLog, caloriesGoal = 0, focusByDate = {}, focusHoursGoal = 0, currentDate, setCurrentDate, onOpenHabit }) {
   const p = palette;
   const weekStart = startOfWeek(currentDate);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -1115,8 +1163,10 @@ function WeekView({ palette, checkboxStyle, habits, toggleLog, caloriesGoal = 0,
           goal={caloriesGoal} days={7}/>
       )}
 
-      <FocusStatsCard palette={p} label={`Week ${weekNum} focus score`}
-        stats={focusStatsForDates(focusByDate, days)}/>
+      <MindfulnessCard palette={p} label={`Week ${weekNum} mindfulness`}
+        focusStats={focusStatsForDates(focusByDate, days)}
+        trackedMs={trackedMsForDates(focusByDate, days)}
+        targetHours={focusHoursGoal * 7}/>
 
       <OrnateDivider color={p.gold} style={{ padding: '0 24px', margin: '12px 0 16px' }}/>
 
@@ -1201,7 +1251,7 @@ function WeekView({ palette, checkboxStyle, habits, toggleLog, caloriesGoal = 0,
   );
 }
 
-function MonthView({ palette, checkboxStyle, habits, toggleLog, caloriesGoal = 0, focusByDate = {}, categories = [], currentDate, setCurrentDate, onOpenHabit }) {
+function MonthView({ palette, checkboxStyle, habits, toggleLog, caloriesGoal = 0, focusByDate = {}, focusHoursGoal = 0, categories = [], currentDate, setCurrentDate, onOpenHabit }) {
   const p = palette;
   const [filterCategory, setFilterCategory] = useState("__all");
   useEffect(() => {
@@ -1374,8 +1424,10 @@ function MonthView({ palette, checkboxStyle, habits, toggleLog, caloriesGoal = 0
       )}
 
       <div style={{ marginTop: 16 }}>
-        <FocusStatsCard palette={p} label={`${monthNames[month]} focus score`}
-          stats={focusStatsForDates(focusByDate, cells.filter(d => d && d <= TODAY))}/>
+        <MindfulnessCard palette={p} label={`${monthNames[month]} mindfulness`}
+          focusStats={focusStatsForDates(focusByDate, cells.filter(d => d && d <= TODAY))}
+          trackedMs={trackedMsForDates(focusByDate, cells.filter(d => d && d <= TODAY))}
+          targetHours={focusHoursGoal * cells.filter(d => d && d <= TODAY && d.getMonth() === month).length}/>
       </div>
     </div>
   );
@@ -1566,7 +1618,7 @@ function TopicDropdown({ palette, value, onChange, topics, addTopic, renameTopic
 }
 
 function FocusView({
-  palette, focus, focusElapsedMs, focusTopics,
+  palette, focus, focusElapsedMs, focusTopics, focusByDate,
   focusSetTask, focusSetTopic, focusSetLimit,
   focusStart, focusPause, focusReset,
   focusDrift, focusReturned, focusDistracted,
@@ -1584,15 +1636,6 @@ function FocusView({
 
   const submitTask = () => {
     if (taskInput.trim()) focusSetTask(taskInput, focus.topic);
-  };
-
-  const fmtLogTime = (ts) => {
-    const d = new Date(ts);
-    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-  };
-  const logLabel = {
-    'task-set': 'Task set', 'start': 'Started', 'pause': 'Paused',
-    'drift': 'Drifted', 'returned': 'Returned', 'distracted': 'Distracted',
   };
 
   return (
@@ -1781,54 +1824,88 @@ function FocusView({
         ))}
       </div>
 
-      {/* Session log */}
-      <div style={{ padding: '0 24px' }}>
-        <div style={{
-          fontFamily: 'Inter', fontSize: 10, letterSpacing: 2, color: p.goldDim,
-          textTransform: 'uppercase', marginBottom: 10, fontWeight: 600,
-        }}>This session's log</div>
-        {focus.log.length === 0 ? (
-          <div style={{
-            fontFamily: '"Cormorant Garamond", serif', fontSize: 15,
-            color: p.pearlDim, fontStyle: 'italic', textAlign: 'center', padding: '12px 0',
-          }}>No entries yet.</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {focus.log.slice().reverse().slice(0, 30).map((entry, i) => {
-              const flameTypes = ['drift', 'distracted'];
-              const goldTypes = ['returned', 'start', 'task-set'];
-              const color = flameTypes.includes(entry.type) ? p.flame
-                          : goldTypes.includes(entry.type) ? p.gold
-                          : p.pearlDim;
-              return (
-                <div key={i} style={{
-                  display: 'flex', gap: 12, alignItems: 'baseline',
-                  padding: '8px 0', borderBottom: i < focus.log.length - 1 ? `1px solid ${p.gold}11` : 'none',
-                }}>
-                  <span style={{
-                    fontFamily: 'JetBrains Mono', fontSize: 10, color: p.pearlDim,
-                    width: 40, flexShrink: 0,
-                  }}>{fmtLogTime(entry.ts)}</span>
-                  <span style={{
-                    fontFamily: 'Inter', fontSize: 10, letterSpacing: 1.5,
-                    color, textTransform: 'uppercase', fontWeight: 600,
-                    width: 90, flexShrink: 0,
-                  }}>{logLabel[entry.type] || entry.type}</span>
-                  <span style={{
-                    flex: 1, fontFamily: '"Cormorant Garamond", serif', fontSize: 14,
-                    color: p.pearl, lineHeight: 1.3, minWidth: 0, wordBreak: 'break-word',
-                  }}>{entry.task}{entry.topic ? ` · ${entry.topic}` : ''}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {/* Today's time by topic */}
+      <TopicTimeView palette={p} focusByDate={focusByDate}
+        running={focus.status === 'running'}/>
     </div>
   );
 }
 
-Object.assign(window, { DayView, WeekView, MonthView, FocusView, TopicDropdown, ViewHeader, navBtn, Stat, fmtTime });
+function TopicTimeView({ palette, focusByDate, running }) {
+  const p = palette;
+  const today = focusByDate?.[dateKey(TODAY)] || {};
+  // Persisted topicMs flushes every 60s while running, plus on transitions
+  // (pause/drift/reset/topic-change). So display is at most ~60s stale.
+  const persisted = today.topicMs || {};
+  const entries = Object.entries(persisted).sort((a, b) => b[1] - a[1]);
+  const total = entries.reduce((s, [, ms]) => s + ms, 0);
+
+  const fmtDur = (ms) => {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    if (h > 0 && m > 0) return `${h}h ${String(m).padStart(2,'0')}m`;
+    if (h > 0)          return `${h}h`;
+    if (m > 0)          return `${m}m`;
+    return '<1m';
+  };
+
+  return (
+    <div style={{ padding: '0 24px' }}>
+      <div style={{
+        fontFamily: 'Inter', fontSize: 10, letterSpacing: 2, color: p.goldDim,
+        textTransform: 'uppercase', marginBottom: 10, fontWeight: 600,
+      }}>Today's time by topic</div>
+      {entries.length === 0 ? (
+        <div style={{
+          fontFamily: '"Cormorant Garamond", serif', fontSize: 15,
+          color: p.pearlDim, fontStyle: 'italic', textAlign: 'center', padding: '12px 0',
+        }}>No time tracked yet today.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {entries.map(([topic, ms], i) => (
+            <div key={topic || '_none'} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+              gap: 12, padding: '10px 0', borderBottom: `1px solid ${p.gold}11`,
+            }}>
+              <span style={{
+                flex: 1, fontFamily: '"Cormorant Garamond", serif', fontSize: 16,
+                color: topic ? p.pearl : p.pearlDim,
+                fontStyle: topic ? 'normal' : 'italic',
+                lineHeight: 1.3, wordBreak: 'break-word', minWidth: 0,
+              }}>{topic || '(no topic)'}</span>
+              <span style={{
+                fontFamily: 'JetBrains Mono', fontSize: 13,
+                color: p.gold, letterSpacing: 0.5, flexShrink: 0,
+              }}>{fmtDur(ms)}</span>
+            </div>
+          ))}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+            paddingTop: 12, marginTop: 4,
+          }}>
+            <span style={{
+              fontFamily: 'Inter', fontSize: 10, letterSpacing: 2, color: p.goldDim,
+              textTransform: 'uppercase', fontWeight: 600,
+            }}>Total</span>
+            <span style={{
+              fontFamily: '"Cormorant Garamond", serif', fontSize: 22,
+              color: p.gold, fontWeight: 500,
+            }}>{fmtDur(total)}</span>
+          </div>
+          {running && (
+            <div style={{
+              fontFamily: 'Inter', fontSize: 9, letterSpacing: 1.5, color: p.pearlDim,
+              fontStyle: 'italic', marginTop: 4, textAlign: 'right',
+            }}>updates every minute while running</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+Object.assign(window, { DayView, WeekView, MonthView, FocusView, TopicDropdown, TopicTimeView, MindfulnessCard, ViewHeader, navBtn, Stat, fmtTime });
 </script>
 
 <!-- ============================================================ -->
@@ -2591,6 +2668,7 @@ const TWEAK_DEFAULTS = {
   "checkboxStyle": "rosette",
   "soundsEnabled": true,
   "caloriesGoal": 2000,
+  "focusHoursGoal": 4,
   "tabBottomGap": 0
 };
 
@@ -2803,12 +2881,30 @@ function HabitApp({ tweaks, setTweak }) {
   function bumpFocusByDate(stat) {
     const k = dateKey(new Date());
     setFocusByDate(prev => {
-      const cur = prev[k] || { drifts: 0, returns: 0, distracted: 0 };
+      const cur = prev[k] || { drifts: 0, returns: 0, distracted: 0, topicMs: {} };
       const next = { ...prev, [k]: { ...cur, [stat]: (cur[stat] || 0) + 1 } };
       persistFocusByDate(next);
       return next;
     });
   }
+  function bumpTopicMs(topic, ms) {
+    if (!ms || ms <= 0) return;
+    const t = topic || '';
+    const k = dateKey(new Date());
+    setFocusByDate(prev => {
+      const cur = prev[k] || { drifts: 0, returns: 0, distracted: 0, topicMs: {} };
+      const topicMs = { ...(cur.topicMs || {}) };
+      topicMs[t] = (topicMs[t] || 0) + ms;
+      const next = { ...prev, [k]: { ...cur, topicMs } };
+      persistFocusByDate(next);
+      return next;
+    });
+  }
+
+  // Ref so async/interval handlers can read the latest focus state
+  // without stale-closure bugs.
+  const focusRef = React.useRef(focus);
+  focusRef.current = focus;
 
   // Re-render every second while running so the timer ticks
   const [_focusTick, _setFocusTick] = useStateA(0);
@@ -2817,6 +2913,38 @@ function HabitApp({ tweaks, setTweak }) {
     const id = setInterval(() => _setFocusTick(t => t + 1), 1000);
     return () => clearInterval(id);
   }, [focus.status]);
+
+  // Periodic time flush — pushes the in-progress run-segment into focusByDate
+  // every 60s so even an unexpected close loses ≤ 1 minute.
+  React.useEffect(() => {
+    if (focus.status !== 'running') return;
+    const id = setInterval(() => {
+      const f = focusRef.current;
+      if (f.status !== 'running' || !f.startedAt) return;
+      const now = Date.now();
+      const runMs = now - f.startedAt;
+      if (runMs <= 0) return;
+      bumpTopicMs(f.topic, runMs);
+      setFocus(prev => ({ ...prev, accumulatedMs: prev.accumulatedMs + runMs, startedAt: now }));
+    }, 60000);
+    return () => clearInterval(id);
+  }, [focus.status]);
+
+  // Flush on visibility-hidden (tab/app backgrounded) so we don't lose time.
+  React.useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState !== 'hidden') return;
+      const f = focusRef.current;
+      if (f.status !== 'running' || !f.startedAt) return;
+      const now = Date.now();
+      const runMs = now - f.startedAt;
+      if (runMs <= 0) return;
+      bumpTopicMs(f.topic, runMs);
+      setFocus(prev => ({ ...prev, accumulatedMs: prev.accumulatedMs + runMs, startedAt: now }));
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+  }, []);
 
   // Limit detection — schedules the ring
   React.useEffect(() => {
@@ -2871,7 +2999,19 @@ function HabitApp({ tweaks, setTweak }) {
     }));
   }
   function focusSetTopic(topic) {
-    setFocus(f => ({ ...f, topic: topic || '' }));
+    const newTopic = topic || '';
+    const f = focusRef.current;
+    if (newTopic === f.topic) return;
+    // If running, flush the in-progress segment to the OLD topic before switching
+    const now = Date.now();
+    const runMs = f.status === 'running' && f.startedAt ? now - f.startedAt : 0;
+    if (runMs > 0) bumpTopicMs(f.topic, runMs);
+    setFocus(prev => ({
+      ...prev,
+      topic: newTopic,
+      accumulatedMs: prev.accumulatedMs + runMs,
+      startedAt: prev.status === 'running' ? now : prev.startedAt,
+    }));
   }
   function focusSetLimit(min) {
     const n = Math.max(0, Math.floor(Number(min) || 0));
@@ -2889,32 +3029,39 @@ function HabitApp({ tweaks, setTweak }) {
     setFocus(f => ({ ...f, alarmRinging: false }));
   }
   function focusPause() {
-    setFocus(f => {
-      const elapsed = f.accumulatedMs + (f.startedAt ? Date.now() - f.startedAt : 0);
-      return {
-        ...f, status: 'paused', startedAt: null, accumulatedMs: elapsed,
-        log: [...f.log, { type: 'pause', task: f.task, topic: f.topic, ts: Date.now() }],
-      };
-    });
+    const f = focusRef.current;
+    const now = Date.now();
+    const runMs = f.startedAt ? now - f.startedAt : 0;
+    if (runMs > 0) bumpTopicMs(f.topic, runMs);
+    setFocus(prev => ({
+      ...prev, status: 'paused', startedAt: null,
+      accumulatedMs: prev.accumulatedMs + runMs,
+      log: [...prev.log, { type: 'pause', task: prev.task, topic: prev.topic, ts: now }],
+    }));
   }
   function focusReset() {
-    setFocus(f => ({
+    const f = focusRef.current;
+    const now = Date.now();
+    const runMs = f.status === 'running' && f.startedAt ? now - f.startedAt : 0;
+    if (runMs > 0) bumpTopicMs(f.topic, runMs);
+    setFocus(prev => ({
       ...FOCUS_INITIAL,
-      task: f.task, topic: f.topic, limitMin: f.limitMin,
+      task: prev.task, topic: prev.topic, limitMin: prev.limitMin,
     }));
   }
   function focusDrift() {
     navigator.vibrate?.(20);
     bumpFocusByDate('drifts');
-    setFocus(f => {
-      const elapsed = f.accumulatedMs +
-        (f.status === 'running' && f.startedAt ? Date.now() - f.startedAt : 0);
-      return {
-        ...f, status: 'drifting', startedAt: null, accumulatedMs: elapsed,
-        drifts: f.drifts + 1,
-        log: [...f.log, { type: 'drift', task: f.task, topic: f.topic, ts: Date.now() }],
-      };
-    });
+    const f = focusRef.current;
+    const now = Date.now();
+    const runMs = f.status === 'running' && f.startedAt ? now - f.startedAt : 0;
+    if (runMs > 0) bumpTopicMs(f.topic, runMs);
+    setFocus(prev => ({
+      ...prev, status: 'drifting', startedAt: null,
+      accumulatedMs: prev.accumulatedMs + runMs,
+      drifts: prev.drifts + 1,
+      log: [...prev.log, { type: 'drift', task: prev.task, topic: prev.topic, ts: now }],
+    }));
   }
   function focusReturned() {
     bumpFocusByDate('returns');
@@ -3055,6 +3202,7 @@ function HabitApp({ tweaks, setTweak }) {
           {route.name === "main" && tab === "focus" && (
             <FocusView palette={palette}
               focus={focus} focusElapsedMs={focusElapsedMs} focusTopics={focusTopics}
+              focusByDate={focusByDate}
               focusSetTask={focusSetTask} focusSetTopic={focusSetTopic} focusSetLimit={focusSetLimit}
               focusStart={focusStart} focusPause={focusPause} focusReset={focusReset}
               focusDrift={focusDrift} focusReturned={focusReturned} focusDistracted={focusDistracted}
@@ -3067,6 +3215,7 @@ function HabitApp({ tweaks, setTweak }) {
               setCalorie={setCalorie}
               caloriesGoal={tweaks.caloriesGoal || 0}
               focusByDate={focusByDate}
+              focusHoursGoal={tweaks.focusHoursGoal || 0}
               categories={categories}
               currentDate={currentDate} setCurrentDate={setCurrentDate}
               onOpenHabit={(h) => setRoute({ name: "detail", habitId: h.id })}
@@ -3078,6 +3227,7 @@ function HabitApp({ tweaks, setTweak }) {
               habits={habitsWithStreak} toggleLog={toggleLog}
               caloriesGoal={tweaks.caloriesGoal || 0}
               focusByDate={focusByDate}
+              focusHoursGoal={tweaks.focusHoursGoal || 0}
               currentDate={currentDate} setCurrentDate={setCurrentDate}
               onOpenHabit={(h) => setRoute({ name: "detail", habitId: h.id })}
             />
@@ -3087,6 +3237,7 @@ function HabitApp({ tweaks, setTweak }) {
               habits={habitsWithStreak} toggleLog={toggleLog}
               caloriesGoal={tweaks.caloriesGoal || 0}
               focusByDate={focusByDate}
+              focusHoursGoal={tweaks.focusHoursGoal || 0}
               categories={categories}
               currentDate={currentDate} setCurrentDate={setCurrentDate}
               onOpenHabit={(h) => setRoute({ name: "detail", habitId: h.id })}
@@ -3282,6 +3433,32 @@ function MenuSheet({ palette, tweaks, setTweak, onClose }) {
           onChange={(e) => {
             const n = parseInt(e.target.value, 10);
             setTweak('caloriesGoal', Number.isFinite(n) && n >= 0 ? n : 0);
+          }}
+          style={{
+            width: '100%', padding: '10px 12px', boxSizing: 'border-box',
+            background: p.bgRaised, border: `1px solid ${p.gold}33`,
+            color: p.pearl, fontFamily: 'JetBrains Mono, monospace',
+            fontSize: 16, outline: 'none', marginBottom: 18, textAlign: 'right',
+          }}
+        />
+
+        <div style={{
+          fontFamily: 'Inter', fontSize: 9, letterSpacing: 2, color: p.goldDim,
+          textTransform: 'uppercase', marginBottom: 8, fontWeight: 600,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+        }}>
+          <span>Daily focus hours goal</span>
+          <span style={{
+            fontFamily: 'JetBrains Mono', fontSize: 9, color: p.pearlDim,
+            letterSpacing: 0.5, textTransform: 'none',
+          }}>hours</span>
+        </div>
+        <input
+          type="number" inputMode="decimal" min="0" step="0.5"
+          value={tweaks.focusHoursGoal ?? 0}
+          onChange={(e) => {
+            const n = parseFloat(e.target.value);
+            setTweak('focusHoursGoal', Number.isFinite(n) && n >= 0 ? n : 0);
           }}
           style={{
             width: '100%', padding: '10px 12px', boxSizing: 'border-box',
