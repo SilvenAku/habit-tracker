@@ -2590,7 +2590,8 @@ const TWEAK_DEFAULTS = {
   "palette": "midnight",
   "checkboxStyle": "rosette",
   "soundsEnabled": true,
-  "caloriesGoal": 2000
+  "caloriesGoal": 2000,
+  "tabBottomGap": 0
 };
 
 // ── Audio (synthesized; no files) ───────────────────────────────────────────
@@ -2685,6 +2686,15 @@ function playAlarm() {
 
 function HabitApp({ tweaks, setTweak }) {
   const palette = PALETTES[tweaks.palette] || PALETTES.midnight;
+
+  // Keep body bg + iOS theme-color in sync with the palette so the
+  // home-indicator area and any other system-rendered chrome match.
+  React.useEffect(() => {
+    document.body.style.background = palette.bg;
+    document.documentElement.style.background = palette.bg;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', palette.bg);
+  }, [palette.bg]);
 
   const _persisted = loadPersisted();
   const [tab, setTab] = useStateA("day");
@@ -3093,7 +3103,9 @@ function HabitApp({ tweaks, setTweak }) {
         </div>
 
         {route.name === "main" && (
-          <TabBar palette={palette} tab={tab} setTab={setTab} onAdd={() => setRoute({ name: "new" })}/>
+          <TabBar palette={palette} tab={tab} setTab={setTab}
+            bottomGap={tweaks.tabBottomGap || 0}
+            onAdd={() => setRoute({ name: "new" })}/>
         )}
 
         {route.name === "edit" && currentHabit && (
@@ -3283,7 +3295,7 @@ function MenuSheet({ palette, tweaks, setTweak, onClose }) {
           fontFamily: 'Inter', fontSize: 9, letterSpacing: 2, color: p.goldDim,
           textTransform: 'uppercase', marginBottom: 8, fontWeight: 600,
         }}>Sounds</div>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 22 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
           <button onClick={() => {
             setTweak('soundsEnabled', true);
             // Prime the AudioContext inside this user gesture so the
@@ -3293,6 +3305,40 @@ function MenuSheet({ palette, tweaks, setTweak, onClose }) {
           <button onClick={() => setTweak('soundsEnabled', false)}
             style={chip(tweaks.soundsEnabled === false)}>Off</button>
         </div>
+
+        <style>{`
+          input[type="range"].menu-slider {
+            -webkit-appearance: none; appearance: none;
+            width: 100%; height: 2px; background: ${p.gold}33; outline: none;
+            margin: 8px 0 4px; cursor: pointer;
+          }
+          input[type="range"].menu-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 16px; height: 16px; background: ${p.gold};
+            border: 1px solid ${p.gold}; cursor: pointer;
+          }
+          input[type="range"].menu-slider::-moz-range-thumb {
+            width: 16px; height: 16px; background: ${p.gold};
+            border: 1px solid ${p.gold}; border-radius: 0; cursor: pointer;
+          }
+        `}</style>
+        <div style={{
+          fontFamily: 'Inter', fontSize: 9, letterSpacing: 2, color: p.goldDim,
+          textTransform: 'uppercase', marginBottom: 6, fontWeight: 600,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+        }}>
+          <span>Tab bottom space</span>
+          <span style={{
+            fontFamily: 'JetBrains Mono', fontSize: 10, color: p.pearlDim,
+            letterSpacing: 0.5, textTransform: 'none',
+          }}>{tweaks.tabBottomGap || 0}px</span>
+        </div>
+        <input type="range" min="0" max="80" step="2"
+          value={tweaks.tabBottomGap || 0}
+          onChange={(e) => setTweak('tabBottomGap', parseInt(e.target.value, 10) || 0)}
+          className="menu-slider"
+        />
+        <div style={{ marginBottom: 22 }}/>
 
         <button onClick={onClose} style={{
           width: '100%', padding: '14px 16px', background: p.gold,
@@ -3305,7 +3351,7 @@ function MenuSheet({ palette, tweaks, setTweak, onClose }) {
   );
 }
 
-function TabBar({ palette, tab, setTab, onAdd }) {
+function TabBar({ palette, tab, setTab, onAdd, bottomGap = 0 }) {
   const p = palette;
   const tabs = [
     { id: "focus", label: "Focus" },
@@ -3316,7 +3362,7 @@ function TabBar({ palette, tab, setTab, onAdd }) {
   return (
     <div style={{
       position: 'relative', padding: '14px 24px',
-      paddingBottom: 'calc(20px + env(safe-area-inset-bottom))',
+      paddingBottom: `calc(20px + ${bottomGap}px + env(safe-area-inset-bottom))`,
       background: `linear-gradient(to top, ${p.bg} 60%, ${p.bg}00)`,
     }}>
       <div style={{
