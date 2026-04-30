@@ -3333,7 +3333,7 @@ function MenuSheet({ palette, tweaks, setTweak, onClose }) {
             letterSpacing: 0.5, textTransform: 'none',
           }}>{tweaks.tabBottomGap || 0}px</span>
         </div>
-        <input type="range" min="0" max="80" step="2"
+        <input type="range" min="-60" max="80" step="2"
           value={tweaks.tabBottomGap || 0}
           onChange={(e) => setTweak('tabBottomGap', parseInt(e.target.value, 10) || 0)}
           className="menu-slider"
@@ -3362,7 +3362,7 @@ function TabBar({ palette, tab, setTab, onAdd, bottomGap = 0 }) {
   return (
     <div style={{
       position: 'relative', padding: '14px 24px',
-      paddingBottom: `calc(20px + ${bottomGap}px + env(safe-area-inset-bottom))`,
+      paddingBottom: `calc(${20 + bottomGap}px + env(safe-area-inset-bottom))`,
       background: `linear-gradient(to top, ${p.bg} 60%, ${p.bg}00)`,
     }}>
       <div style={{
