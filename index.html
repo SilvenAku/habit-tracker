@@ -790,36 +790,53 @@ function CalorieIndicator({ palette, label, net, goal, days = 1 }) {
   );
 }
 
-// Focus stats summary — drift/return/distracted across a set of dates
+// Focus KPI — single 0–100 score from returns vs distracted
+//   score = returns / (returns + 2 * distracted) × 100
+// Distractions weighted 2× because giving in is worse than recovering.
+function focusScoreFor(stats) {
+  const r = stats?.returns || 0;
+  const x = stats?.distracted || 0;
+  if (r + x === 0) return null;
+  return Math.round((r / (r + 2 * x)) * 100);
+}
+function focusTier(palette, score) {
+  const p = palette;
+  if (score == null) return { color: p.pearlDim, name: 'No focus sessions' };
+  if (score >= 85)   return { color: p.gold,    name: 'Excellent' };
+  if (score >= 60)   return { color: p.gold,    name: 'Strong' };
+  if (score >= 40)   return { color: p.pearl,   name: 'Mixed' };
+  return                     { color: p.flame,   name: 'Distracted' };
+}
+
 function FocusStatsCard({ palette, label, stats }) {
   const p = palette;
-  const items = [
-    { label: 'Drifts',     value: stats.drifts,     color: p.flame },
-    { label: 'Returned',   value: stats.returns,    color: p.gold },
-    { label: 'Distracted', value: stats.distracted, color: p.frost },
-  ];
+  const score = focusScoreFor(stats);
+  const t = focusTier(p, score);
   return (
-    <div style={{ margin: '0 24px 16px', padding: '12px 14px', background: p.bgRaised, position: 'relative' }}>
+    <div style={{ margin: '0 24px 16px', padding: '14px 16px', background: p.bgRaised, position: 'relative' }}>
       {[{top:-3,left:-3},{top:-3,right:-3},{bottom:-3,left:-3},{bottom:-3,right:-3}].map((pos,i) => (
-        <div key={i} style={{ position:'absolute', width:6, height:6, background: p.gold, ...pos }}/>
+        <div key={i} style={{ position:'absolute', width:6, height:6, background: t.color, ...pos }}/>
       ))}
       <div style={{
         fontFamily: 'Inter', fontSize: 9, letterSpacing: 2, color: p.goldDim,
-        textTransform: 'uppercase', fontWeight: 600, marginBottom: 8,
+        textTransform: 'uppercase', fontWeight: 600, marginBottom: 10,
       }}>{label}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-        {items.map((s, i) => (
-          <div key={i} style={{ textAlign: 'center' }}>
-            <div style={{
-              fontFamily: '"Cormorant Garamond", serif', fontSize: 26,
-              color: s.color, fontWeight: 500, lineHeight: 1,
-            }}>{s.value}</div>
-            <div style={{
-              fontFamily: 'Inter', fontSize: 9, letterSpacing: 1.5, color: p.pearlDim,
-              textTransform: 'uppercase', marginTop: 4, fontWeight: 600,
-            }}>{s.label}</div>
-          </div>
-        ))}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        <div style={{
+          fontFamily: '"Cormorant Garamond", serif', fontSize: 44,
+          color: t.color, fontWeight: 500, lineHeight: 1,
+        }}>{score == null ? '—' : score}</div>
+        {score != null && (
+          <div style={{
+            fontFamily: 'JetBrains Mono', fontSize: 12, color: p.pearlDim,
+            letterSpacing: 0.5,
+          }}>/ 100</div>
+        )}
+        <div style={{ flex: 1 }}/>
+        <div style={{
+          fontFamily: 'Inter', fontSize: 10, letterSpacing: 1.5, color: t.color,
+          textTransform: 'uppercase', fontWeight: 600, textAlign: 'right',
+        }}>{t.name}</div>
       </div>
     </div>
   );
@@ -928,7 +945,7 @@ function DayView({ palette, checkboxStyle, habits, toggleLog, setCalorie, calori
           goal={caloriesGoal} days={1}/>
       )}
 
-      <FocusStatsCard palette={p} label="Today's focus"
+      <FocusStatsCard palette={p} label="Today's focus score"
         stats={focusStatsForDates(focusByDate, [currentDate])}/>
 
       <OrnateDivider color={p.gold} style={{ padding: '0 24px', marginBottom: 16 }}/>
@@ -1098,7 +1115,7 @@ function WeekView({ palette, checkboxStyle, habits, toggleLog, caloriesGoal = 0,
           goal={caloriesGoal} days={7}/>
       )}
 
-      <FocusStatsCard palette={p} label={`Week ${weekNum} focus`}
+      <FocusStatsCard palette={p} label={`Week ${weekNum} focus score`}
         stats={focusStatsForDates(focusByDate, days)}/>
 
       <OrnateDivider color={p.gold} style={{ padding: '0 24px', margin: '12px 0 16px' }}/>
@@ -1357,7 +1374,7 @@ function MonthView({ palette, checkboxStyle, habits, toggleLog, caloriesGoal = 0
       )}
 
       <div style={{ marginTop: 16 }}>
-        <FocusStatsCard palette={p} label={`${monthNames[month]} focus`}
+        <FocusStatsCard palette={p} label={`${monthNames[month]} focus score`}
           stats={focusStatsForDates(focusByDate, cells.filter(d => d && d <= TODAY))}/>
       </div>
     </div>
