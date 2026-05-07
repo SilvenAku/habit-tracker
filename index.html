@@ -1619,54 +1619,23 @@ function TopicDropdown({ palette, value, onChange, topics, addTopic, renameTopic
 
 function FocusView({
   palette, focus, focusElapsedMs, focusTopics, focusByDate,
-  focusSetTask, focusSetTopic, focusSetLimit,
+  focusSetTopic, focusSetLimit,
   focusStart, focusPause, focusReset,
   focusDrift, focusReturned, focusDistracted,
   addFocusTopic, renameFocusTopic, removeFocusTopic,
 }) {
   const p = palette;
-  const [taskInput, setTaskInput] = useState(focus.task);
-  useEffect(() => { setTaskInput(focus.task); }, [focus.task]);
-
   const isRunning = focus.status === 'running';
   const isDrifting = focus.status === 'drifting';
-  const hasTask = !!focus.task;
+  const hasTask = !!focus.topic;
   const limitMs = focus.limitMin * 60000;
   const overLimit = limitMs > 0 && focusElapsedMs >= limitMs;
-
-  const submitTask = () => {
-    if (taskInput.trim()) focusSetTask(taskInput, focus.topic);
-  };
 
   return (
     <div style={{ minHeight: '100%', paddingBottom: 100 }}>
       <ViewHeader palette={p} eyebrow="Focus" title="Focus Tracker"/>
 
       <OrnateDivider color={p.gold} style={{ padding: '0 24px', margin: '12px 0 16px' }}/>
-
-      {/* Task entry */}
-      <div style={{ padding: '0 24px', marginBottom: 10 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            value={taskInput}
-            onChange={(e) => setTaskInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') submitTask(); }}
-            placeholder="What's your current task?"
-            style={{
-              flex: 1, padding: '10px 12px', boxSizing: 'border-box',
-              background: p.bgRaised, border: `1px solid ${p.gold}33`,
-              color: p.pearl, fontFamily: '"Cormorant Garamond", serif', fontSize: 15,
-              outline: 'none',
-            }}
-          />
-          <button onClick={submitTask} disabled={!taskInput.trim()} style={{
-            padding: '10px 16px', background: taskInput.trim() ? p.gold : `${p.gold}55`,
-            border: `1px solid ${p.gold}`, color: p.bg,
-            fontFamily: 'Inter', fontSize: 11, letterSpacing: 2,
-            textTransform: 'uppercase', cursor: taskInput.trim() ? 'pointer' : 'default', fontWeight: 600,
-          }}>Set</button>
-        </div>
-      </div>
 
       {/* Topic + time limit */}
       <div style={{ padding: '0 24px', marginBottom: 16, display: 'flex', gap: 8 }}>
@@ -1707,18 +1676,12 @@ function FocusView({
           <div style={{
             fontFamily: 'Inter', fontSize: 10, letterSpacing: 2.5, color: p.goldDim,
             textTransform: 'uppercase', textAlign: 'center', marginBottom: 6, fontWeight: 600,
-          }}>Current Task</div>
+          }}>Focusing on</div>
           <div style={{
             fontFamily: '"Cormorant Garamond", serif', fontSize: 22,
             color: hasTask ? p.pearl : p.pearlDim, fontWeight: 400,
-            textAlign: 'center', lineHeight: 1.2, marginBottom: focus.topic ? 4 : 16,
-          }}>{hasTask ? focus.task : '—'}</div>
-          {focus.topic && (
-            <div style={{
-              fontFamily: 'Inter', fontSize: 10, letterSpacing: 2, color: p.goldDim,
-              textTransform: 'uppercase', textAlign: 'center', marginBottom: 16, fontWeight: 500,
-            }}>Topic · {focus.topic}</div>
-          )}
+            textAlign: 'center', lineHeight: 1.2, marginBottom: 16,
+          }}>{hasTask ? focus.topic : '—'}</div>
           <div style={{
             fontFamily: 'JetBrains Mono, monospace', fontSize: 56,
             color: overLimit ? p.flame : p.gold, fontWeight: 300, lineHeight: 1,
@@ -2988,16 +2951,6 @@ function HabitApp({ tweaks, setTweak }) {
   const focusElapsedMs = focus.accumulatedMs +
     (focus.status === 'running' && focus.startedAt ? Date.now() - focus.startedAt : 0);
 
-  function focusSetTask(task, topic) {
-    const t = (task || '').trim();
-    if (!t) return;
-    setFocus(f => ({
-      ...f,
-      task: t,
-      topic: topic ?? f.topic,
-      log: [...f.log, { type: 'task-set', task: t, topic: topic ?? f.topic, ts: Date.now() }],
-    }));
-  }
   function focusSetTopic(topic) {
     const newTopic = topic || '';
     const f = focusRef.current;
@@ -3009,6 +2962,9 @@ function HabitApp({ tweaks, setTweak }) {
     setFocus(prev => ({
       ...prev,
       topic: newTopic,
+      // Topic is now the only identifier — keep `task` synced to the topic
+      // so log entries and the alarm banner keep working.
+      task: newTopic,
       accumulatedMs: prev.accumulatedMs + runMs,
       startedAt: prev.status === 'running' ? now : prev.startedAt,
     }));
@@ -3203,7 +3159,7 @@ function HabitApp({ tweaks, setTweak }) {
             <FocusView palette={palette}
               focus={focus} focusElapsedMs={focusElapsedMs} focusTopics={focusTopics}
               focusByDate={focusByDate}
-              focusSetTask={focusSetTask} focusSetTopic={focusSetTopic} focusSetLimit={focusSetLimit}
+              focusSetTopic={focusSetTopic} focusSetLimit={focusSetLimit}
               focusStart={focusStart} focusPause={focusPause} focusReset={focusReset}
               focusDrift={focusDrift} focusReturned={focusReturned} focusDistracted={focusDistracted}
               addFocusTopic={addFocusTopic} renameFocusTopic={renameFocusTopic} removeFocusTopic={removeFocusTopic}
