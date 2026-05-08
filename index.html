@@ -729,6 +729,7 @@ function loadPersisted() {
         ...h,
         logs: new Set(h.logs || []),
         calories: h.calories || {},
+        freezeGrants: new Set(h.freezeGrants || []),
       })),
       categories: p.categories || null,
     };
@@ -737,7 +738,12 @@ function loadPersisted() {
 function savePersisted(habits, categories) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      habits: habits.map(h => ({ ...h, logs: Array.from(h.logs || []), calories: h.calories || {} })),
+      habits: habits.map(h => ({
+        ...h,
+        logs: Array.from(h.logs || []),
+        calories: h.calories || {},
+        freezeGrants: Array.from(h.freezeGrants || []),
+      })),
       categories,
     }));
   } catch {}
@@ -923,7 +929,56 @@ function ViewHeader({ palette, eyebrow, title, subtitle, onBack, right }) {
   );
 }
 
-function DayView({ palette, checkboxStyle, habits, toggleLog, setCalorie, caloriesGoal = 0, focusByDate = {}, focusHoursGoal = 0, categories = [], currentDate, setCurrentDate, onOpenHabit, onOpenDate }) {
+// Streak chip with a long-press affordance to grant/undo a manual freeze.
+function StreakChip({ habit: h, palette: p, onLongPress }) {
+  const timer = React.useRef(null);
+  const fired = React.useRef(false);
+  const start = (e) => {
+    fired.current = false;
+    timer.current = setTimeout(() => {
+      fired.current = true;
+      onLongPress?.(h.id);
+    }, 500);
+  };
+  const cancel = () => clearTimeout(timer.current);
+  const swallow = (e) => {
+    if (fired.current) {
+      e.stopPropagation();
+      e.preventDefault();
+      fired.current = false;
+    }
+  };
+  return (
+    <div
+      onPointerDown={start}
+      onPointerUp={cancel}
+      onPointerLeave={cancel}
+      onPointerCancel={cancel}
+      onClick={swallow}
+      title="Long-press to extend streak with a freeze"
+      style={{
+        display: 'flex', alignItems: 'center', gap: 5,
+        padding: '4px 8px',
+        border: `1px solid ${(h.frozen ? p.frost : p.gold)}44`,
+        background: `${(h.frozen ? p.frost : p.gold)}0D`,
+        cursor: 'pointer', userSelect: 'none',
+      }}>
+      {h.frozen
+        ? <FrostGlyph size={12} color={p.frost}/>
+        : <FlameGlyph size={12} color={h.streak > 0 ? p.flame : p.pearlDim}/>
+      }
+      <span style={{
+        fontFamily: 'JetBrains Mono', fontSize: 11,
+        color: h.frozen ? p.frost : (h.streak > 0 ? p.gold : p.pearlDim),
+        letterSpacing: 0.5,
+      }}>
+        {h.streak.toString().padStart(2,'0')}
+      </span>
+    </div>
+  );
+}
+
+function DayView({ palette, checkboxStyle, habits, toggleLog, setCalorie, grantFreezeFor, caloriesGoal = 0, focusByDate = {}, focusHoursGoal = 0, categories = [], currentDate, setCurrentDate, onOpenHabit, onOpenDate }) {
   const p = palette;
   const isToday = dateKey(currentDate) === dateKey(TODAY);
   const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -1084,24 +1139,7 @@ function DayView({ palette, checkboxStyle, habits, toggleLog, setCalorie, calori
                     </div>
                   )}
                 </div>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  padding: '4px 8px',
-                  border: `1px solid ${(h.frozen ? p.frost : p.gold)}44`,
-                  background: `${(h.frozen ? p.frost : p.gold)}0D`,
-                }}>
-                  {h.frozen
-                    ? <FrostGlyph size={12} color={p.frost}/>
-                    : <FlameGlyph size={12} color={h.streak > 0 ? p.flame : p.pearlDim}/>
-                  }
-                  <span style={{
-                    fontFamily: 'JetBrains Mono', fontSize: 11,
-                    color: h.frozen ? p.frost : (h.streak > 0 ? p.gold : p.pearlDim),
-                    letterSpacing: 0.5,
-                  }}>
-                    {h.streak.toString().padStart(2,'0')}
-                  </span>
-                </div>
+                <StreakChip habit={h} palette={p} onLongPress={grantFreezeFor}/>
               </div>
               {i < visibleHabits.length - 1 && <div style={{ height: 1, background: `${p.gold}1A` }}/>}
             </div>
@@ -2801,6 +2839,35 @@ function HabitApp({ tweaks, setTweak }) {
     }));
   }
 
+  function grantFreezeFor(habitId) {
+    navigator.vibrate?.(50);
+    if (tweaks.soundsEnabled !== false) playClick();
+    setHabits(prev => prev.map(h => {
+      if (h.id !== habitId) return h;
+      const grants = new Set(h.freezeGrants || []);
+      // Walk back from today to the most recent logged day (cap 30d).
+      // Collect every missed day in that window into `window`.
+      let cursor = new Date(TODAY);
+      const win = [];
+      for (let i = 0; i < 30; i++) {
+        const k = dateKey(cursor);
+        if (h.logs.has(k)) break;
+        win.push(k);
+        cursor = addDays(cursor, -1);
+      }
+      if (win.length === 0) return h;
+      // Toggle: if every day in the window is already granted, undo (clear them).
+      // Otherwise grant the missing ones.
+      const allGranted = win.every(k => grants.has(k));
+      if (allGranted) {
+        win.forEach(k => grants.delete(k));
+      } else {
+        win.forEach(k => grants.add(k));
+      }
+      return { ...h, freezeGrants: grants };
+    }));
+  }
+
   function setCalorie(habitId, date, raw) {
     setHabits(prev => prev.map(h => {
       if (h.id !== habitId) return h;
@@ -3082,8 +3149,16 @@ function HabitApp({ tweaks, setTweak }) {
     let streak = 0, freeze = 0, frozen = false;
     let cursor = new Date(TODAY);
     for (let i = 0; i < 365; i++) {
-      if (h.logs.has(dateKey(cursor))) { streak++; freeze = 0; }
-      else { freeze++; if (freeze > 2) break; }
+      const k = dateKey(cursor);
+      if (h.logs.has(k)) {
+        streak++; freeze = 0;
+      } else if (h.freezeGrants?.has(k)) {
+        // Manual freeze — bridges the gap; doesn't burn the auto-freeze budget
+        // and doesn't increment streak. Streak survives.
+      } else {
+        freeze++;
+        if (freeze > 2) break;
+      }
       cursor = addDays(cursor, -1);
     }
     frozen = !h.logs.has(dateKey(TODAY)) && streak > 0;
@@ -3169,6 +3244,7 @@ function HabitApp({ tweaks, setTweak }) {
             <DayView palette={palette} checkboxStyle={tweaks.checkboxStyle}
               habits={habitsWithStreak} toggleLog={toggleLog}
               setCalorie={setCalorie}
+              grantFreezeFor={grantFreezeFor}
               caloriesGoal={tweaks.caloriesGoal || 0}
               focusByDate={focusByDate}
               focusHoursGoal={tweaks.focusHoursGoal || 0}
@@ -3270,6 +3346,7 @@ function HabitApp({ tweaks, setTweak }) {
                 frozen: false,
                 logs: new Set(),
                 calories: {},
+                freezeGrants: new Set(),
               }]);
               setTab("day");
             }}
